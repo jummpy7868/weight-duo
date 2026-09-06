@@ -3,8 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#F2F4F3">
+<meta name="theme-color" content="#F2F4F3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141A19" media="(prefers-color-scheme: dark)">
 <title>兩人體重刻度盤</title>
+
+<!-- PWA:加到主畫面後以獨立 app 開啟 -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="體重刻度盤">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600&display=swap">
 <style>
@@ -40,13 +50,20 @@
 
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
+/* iOS 橡皮筋回彈會把整個合成圖層帶走;standalone 下尤其明顯 */
+html,body{overscroll-behavior-y:none}
 body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;
-  -webkit-font-smoothing:antialiased;padding:26px 18px calc(64px + env(safe-area-inset-bottom))}
+  -webkit-font-smoothing:antialiased;
+  padding:calc(26px + env(safe-area-inset-top)) calc(18px + env(safe-area-inset-right))
+          calc(64px + env(safe-area-inset-bottom)) calc(18px + env(safe-area-inset-left))}
 .wrap{max-width:940px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
 
 header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;
   border-bottom:1px solid var(--line);padding-bottom:14px}
-h1{font-family:var(--serif);font-size:25px;font-weight:600;margin:0;letter-spacing:.02em;text-wrap:balance}
+h1{font-family:var(--serif);font-size:25px;font-weight:600;margin:0;letter-spacing:.02em;text-wrap:balance;
+  display:flex;align-items:baseline;gap:9px;white-space:nowrap}
+/* Service Worker 常常吐舊版:先確認這裡的版本再回報問題 */
+.ver{font-family:var(--mono);font-size:11px;font-weight:400;color:var(--muted);letter-spacing:.04em}
 .sub{color:var(--muted);font-size:13px;margin:2px 0 0}
 #sync{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--muted);cursor:pointer;
   display:flex;align-items:center;gap:7px;white-space:nowrap;background:none;border:0;padding:6px 2px}
@@ -158,7 +175,7 @@ button.danger{color:var(--b);border-color:transparent}
 <div class="wrap">
   <header>
     <div>
-      <h1>兩人體重刻度盤</h1>
+      <h1>兩人體重刻度盤<span class="ver" id="ver">v2</span></h1>
       <p class="sub">記一筆體重，看見自己離目標線是超前還是落後。</p>
     </div>
     <button id="sync" class="local" type="button">本機儲存</button>
@@ -733,6 +750,21 @@ const boot = readLocal();
 if(boot.state){ try{ applyBlob(JSON.stringify(boot.state)); }catch(e){} }
 render();
 initFirebase();
+
+/* ---------------- PWA ----------------
+   sw.js 的 VERSION 與上方 #ver 的字樣要一起 bump。         */
+if("serviceWorker" in navigator && location.protocol !== "file:"){
+  let hadController = !!navigator.serviceWorker.controller;
+  addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js")
+      .catch(e => console.warn("Service Worker 沒註冊成功：" + (e.name || "") + " " + e.message));
+  });
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    // 只提示、不自動重載——使用者可能正在輸入一筆體重。
+    if(hadController) toast("已有新版本，重新開啟這個 app 就會更新。", true);
+    hadController = true;
+  });
+}
 
 /* ---------------- self-check（開 console 看，不影響畫面） ---------------- */
 (function selfCheck(){
