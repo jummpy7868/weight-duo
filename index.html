@@ -175,7 +175,7 @@ button.danger{color:var(--b);border-color:transparent}
 <div class="wrap">
   <header>
     <div>
-      <h1>兩人體重刻度盤<span class="ver" id="ver">v3</span></h1>
+      <h1>兩人體重刻度盤<span class="ver" id="ver">v4</span></h1>
       <p class="sub">記一筆體重，看見自己離目標線是超前還是落後。</p>
     </div>
     <button id="sync" class="local" type="button">本機儲存</button>
@@ -258,16 +258,16 @@ button.danger{color:var(--b);border-color:transparent}
 <dialog id="authDlg">
   <form id="authForm">
     <h3 id="authTitle">登入同步</h3>
-    <p class="hint" id="authHint">兩個人登入<strong>同一組帳號</strong>，資料就會即時同步。第一次使用請先「建立帳號」。</p>
+    <p class="hint" id="authHint">兩個人登入<strong>同一組帳號</strong>，資料就會即時同步。<br>還沒有帳號 → 按 <strong>建立帳號</strong>；已經建過 → 按 <strong>登入</strong>。</p>
     <div class="dlg-grid">
       <div class="field full"><label for="email">Email</label><input type="email" id="email" autocomplete="username" required></div>
       <div class="field full"><label for="pw">密碼</label><input type="password" id="pw" autocomplete="current-password" minlength="6" required></div>
     </div>
     <p class="err" id="authErr"></p>
     <div class="dlg-foot">
-      <button type="button" class="quiet" id="authSignup">建立帳號</button>
+      <button type="button" class="quiet" id="authCancel">先不要</button>
       <div class="right">
-        <button type="button" class="quiet" id="authCancel">先不要</button>
+        <button type="button" class="quiet" id="authSignup">建立帳號</button>
         <button type="submit" class="primary" id="authGo">登入</button>
       </div>
     </div>
@@ -418,10 +418,12 @@ function initFirebase(){
 
 /* ---------------- 帳號 UI ---------------- */
 function authMsg(code){
+  // Firebase 開了 email 列舉保護後,「查無此帳號」與「密碼錯」都回 invalid-credential,
+  // 分不出來。所以這三個訊息都必須同時提到「建立帳號」這條路。
   return ({
-    "auth/invalid-credential":"帳號或密碼不對。",
-    "auth/wrong-password":"密碼不對。",
-    "auth/user-not-found":"沒有這個帳號，先按「建立帳號」。",
+    "auth/invalid-credential":"帳號或密碼不對。第一次使用的話，請改按「建立帳號」。",
+    "auth/wrong-password":"密碼不對。第一次使用的話，請改按「建立帳號」。",
+    "auth/user-not-found":"還沒有這個帳號，請改按「建立帳號」。",
     "auth/invalid-email":"Email 格式不對。",
     "auth/weak-password":"密碼至少 6 個字。",
     "auth/email-already-in-use":"這個 Email 已經註冊過了，直接登入即可。",

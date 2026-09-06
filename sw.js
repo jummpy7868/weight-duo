@@ -2,7 +2,7 @@
    改動這個檔或 index.html 之後，VERSION 必須 bump，
    否則舊快取不會被清掉，使用者會拿到舊版而且完全沒有錯誤訊息。
    畫面右上角的版本字樣就是拿來確認「我現在看到的是哪一版」。 */
-const VERSION = "v3";
+const VERSION = "v4";
 const SHELL   = VERSION + "-shell";
 const RUNTIME = VERSION + "-cdn";
 
