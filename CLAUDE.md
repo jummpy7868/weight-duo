@@ -101,8 +101,19 @@ Service Worker 的攔截範圍是刻意收窄的，**不要放寬**：
 | fonts.googleapis / fonts.gstatic / www.gstatic | 快取優先 | 版本化網址，不會變 |
 | 其他（firestore / identitytoolkit / securetoken …） | **完全不呼叫 `respondWith`** | 攔了會擋掉即時同步與登入，而且是靜默失敗 |
 
-圖示是用 `node + zlib` 手寫 PNG 產生的（本機沒有 ImageMagick，`convert` 是 Windows 的檔案系統工具不是它）。
-產生器留在 scratchpad，要改圖示直接重寫一份即可，不要手動編輯 PNG。
+### 圖示
+
+**改圖示 = 換掉 `icon-src.png` 再跑 `make-icons.ps1`**，不要手動編輯輸出的 PNG。
+本機沒有 ImageMagick（`convert` 是 Windows 的檔案系統工具，不是它），用 System.Drawing 縮放。
+
+那支腳本有兩個非改不可的寫法，動它之前先讀腳本開頭的註解：
+
+1. **主體包在 here-string 裡再 `Invoke-Expression`**。PowerShell 5.1 會先解析整個檔案才執行，
+   檔案裡的 `[System.Drawing.X]` 在 `Add-Type` 跑到之前就要解析 → `Unable to find type`。
+   同一段程式碼貼進 shell 逐句跑卻正常，很容易誤判成環境壞掉。
+2. **maskable 版單獨產一張**（`icon-maskable-512.png`，內縮 78% + 補底色）。
+   Android 會把圖示裁成圓角／圓形遮罩，直接拿滿版圖當 maskable 會把貼邊的元素切掉。
+   補邊色取邊框八點平均——只取一個角落像素會被暈影或 JPEG 雜訊帶偏，接縫看得出來。
 
 ## 交付前固定跑（不要跳過）
 
