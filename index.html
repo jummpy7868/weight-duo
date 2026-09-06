@@ -175,7 +175,7 @@ button.danger{color:var(--b);border-color:transparent}
 <div class="wrap">
   <header>
     <div>
-      <h1>兩人體重刻度盤<span class="ver" id="ver">v2</span></h1>
+      <h1>兩人體重刻度盤<span class="ver" id="ver">v3</span></h1>
       <p class="sub">記一筆體重，看見自己離目標線是超前還是落後。</p>
     </div>
     <button id="sync" class="local" type="button">本機儲存</button>
@@ -291,15 +291,17 @@ button.danger{color:var(--b);border-color:transparent}
 "use strict";
 
 /* ============================================================
-   Firebase 設定 —— 建好專案後把這四行換掉即可。
-   apiKey 是公開設計的，安全靠 Auth + Firestore 規則，不是靠藏它。
-   還沒填時整個 app 自動退成單機模式（localStorage），功能一樣。
+   Firebase 設定（Firebase Console → 專案設定 → 你的應用程式）。
+   apiKey 是公開設計的，安全靠 Auth 帳密 + firestore.rules，不是靠藏它。
+   把 apiKey 改回 PASTE_ 開頭，整個 app 會退成單機模式（localStorage）。
    ============================================================ */
 const FB = {
-  apiKey:     "PASTE_API_KEY",
-  authDomain: "PASTE_PROJECT.firebaseapp.com",
-  projectId:  "PASTE_PROJECT",
-  appId:      "PASTE_APP_ID"
+  apiKey:            "AIzaSyAAZo8Xvkgr93F7EshELxpVW1RN4Ups1DY",
+  authDomain:        "weight-duo.firebaseapp.com",
+  projectId:         "weight-duo",
+  storageBucket:     "weight-duo.firebasestorage.app",
+  messagingSenderId: "408964734057",
+  appId:             "1:408964734057:web:fdee04565252720bbe56f8"
 };
 const CLOUD = FB.apiKey.indexOf("PASTE_") !== 0;
 
