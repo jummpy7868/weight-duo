@@ -93,7 +93,11 @@ input[type=date],input[type=number],input[type=text],input[type=email],input[typ
   font-family:var(--sans);font-variant-numeric:tabular-nums;font-size:16px;color:var(--ink);background:var(--surface);
   border:1px solid var(--line);border-radius:7px;padding:0 11px;width:100%;min-width:0;
   height:var(--ctl);line-height:normal;-webkit-appearance:none;appearance:none}
-input[type=date]{ display:block }   /* iOS 預設 inline,會多出基線間隙 */
+/* iOS 的日期欄:值住在 shadow 元素 ::-webkit-date-and-time-value 裡,預設置中對齊;
+   appearance:none 拿掉原生外觀後,iOS 不再幫它垂直置中,會貼在頂端。
+   對 host 用 flex 置中、對 shadow 元素拿掉置中與 margin,才會跟旁邊的數字欄同高同對齊。 */
+input[type=date]{ display:flex; align-items:center; text-align:left }
+input[type=date]::-webkit-date-and-time-value{ text-align:left; margin:0; line-height:normal; min-height:1.2em }
 input:focus-visible,button:focus-visible,.chip:focus-visible{outline:2px solid var(--a);outline-offset:2px}
 .who{display:flex;gap:8px}
 .who button{flex:1;font-family:var(--sans);font-size:14px;padding:0 8px;height:var(--ctl);border-radius:7px;cursor:pointer;
@@ -214,7 +218,7 @@ button.danger{color:var(--b);border-color:transparent}
 <div class="wrap">
   <header>
     <div>
-      <h1>兩人體重刻度盤<span class="ver" id="ver">v9</span></h1>
+      <h1>兩人體重刻度盤<span class="ver" id="ver">v10</span></h1>
       <p class="sub">記一筆體重，看見自己離目標線是超前還是落後。</p>
     </div>
     <button id="sync" class="local" type="button">本機儲存</button>
