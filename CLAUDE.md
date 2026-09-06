@@ -75,6 +75,36 @@ tenants/{uid}  →  { data: "<整份狀態的 JSON 字串>", updated: <ms> }
 - SVG 的顏色一律走 CSS 變數（`var(--a)` / `var(--ink)` / `var(--line-soft)`），
   寫死色碼在深色主題下會變成看不見的字。
 
+## PWA：**每次改動都要 bump 版本**
+
+`sw.js` 的 `VERSION` 與 `index.html` 裡 `<span class="ver" id="ver">` 的字樣是**同一個版本號的兩份副本**，
+必須一起改。忘了 bump → 舊快取不清 → 使用者拿到舊版而且**完全沒有錯誤訊息**。
+交付檢查腳本會比對這兩處，不一致會叫。
+
+Service Worker 的攔截範圍是刻意收窄的，**不要放寬**：
+
+| 請求 | 策略 | 為什麼 |
+|---|---|---|
+| 非 GET | 不攔 | Firestore 寫入是 POST |
+| 同源 | 網路優先，離線回快取 | push 的新版要馬上拿得到 |
+| fonts.googleapis / fonts.gstatic / www.gstatic | 快取優先 | 版本化網址，不會變 |
+| 其他（firestore / identitytoolkit / securetoken …） | **完全不呼叫 `respondWith`** | 攔了會擋掉即時同步與登入，而且是靜默失敗 |
+
+圖示是用 `node + zlib` 手寫 PNG 產生的（本機沒有 ImageMagick，`convert` 是 Windows 的檔案系統工具不是它）。
+產生器留在 scratchpad，要改圖示直接重寫一份即可，不要手動編輯 PNG。
+
+## 交付前固定跑（不要跳過）
+
+單檔 app 沒有編譯器，很多錯是**安靜地**發生的——CSS 少一個括號會讓下一條規則被靜默吞掉。
+
+```bash
+node check.js
+```
+
+檢查 CSS 大括號平衡、每個 inline script 與 `sw.js` 的語法、manifest 可解析、
+**版本號兩份副本一致**、被引用的檔案都存在、`sw.js` 沒有把 Firebase API 主機列進快取白名單。
+改完 CSS 或 script 一定要重跑，非 0 離開碼就是有東西壞了。
+
 ## 用語
 
 健康類 app，措辭要降焦慮：用「超前／落後」不用「達標／失敗」，
