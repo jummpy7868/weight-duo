@@ -22,39 +22,38 @@ Artifact 的 CSP 只允許 cdnjs/jsdelivr 且擋 XHR，**跑不了 Firebase**，
 | 已填、未登入 | localStorage | 未登入 · 只存這台裝置 |
 | 已登入 | Firestore `tenants/{uid}` + localStorage 快取 | 雲端同步 |
 
-## 資料模型：**一個帳號一份文件**
+## 資料模型：**一個帳號一份文件，欄位帶時間戳，雲端進來用合併**
 
 ```
 tenants/{uid}  →  { data: "<整份狀態的 JSON 字串>", updated: <ms> }
 ```
 
-狀態本身長這樣：
+狀態本身（v8 起）：
 
 ```js
-{ entries: { "2026-09-06_a": {date, person:"a"|"b", kg} , ... },
-  goals:   { a: {startDate, startWeight, targetDate, targetWeight}, b: {...} },
-  names:   { a: "…", b: "…" } }
+{ entries: { "2026-09-06_a": {date, person:"a"|"b", kg, t}  |  {del:true, t} , ... },
+  goals:   { a: { "<起算日>": {startDate, startWeight, targetDate, targetWeight, t} | {del:true, t} }, b: {...} },
+  names:   { a: "…", b: "…", t } }
 ```
 
+- **每一筆都帶 `t`（最後改動的毫秒），刪除是留墓碑 `{del:true,t}` 不是真的刪。**
+  這讓 `merge(local, remote)` 可以逐 key 取 `t` 大的那份：兩人同一秒各記一筆不會互吃、
+  Safari 把分頁重載時本機還沒送出的改動不會被雲端蓋掉、一台刪了另一台不會把它復活。
+  平手（例如兩邊都是遷移來的 t=0）讓雲端贏。墓碑超過 `TOMB_KEEP_DAYS` 天在 `stateBlob()` 時剪掉。
+- **`onSnapshot` 收到雲端版本一律 `merge` 進 S，不是 `applyBlob` 整份取代**；合併後 `stateBlob()` 若和雲端字串不同，
+  代表本機有雲端沒有的東西，立刻推回去。`applyBlob`（整份取代）只用在開機讀 localStorage。
+- **所有讀取都要過 `live(map)` 濾掉墓碑**——`seriesOf` / `periodsOf` / `renderLog` 都是。
+  直接 `Object.values(S.entries)` 會把已刪的畫出來。
+- **`migrate()` 負責吃 v7 以前的舊格式**（entries 沒 `t`、goals[p] 是單一物件），對新格式必須是恆等。
+  雲端第一次被 v8 讀到時會自動改寫成新格式，不需要手動搬。
 - **整份 `JSON.stringify` 進 `data` 欄位是刻意的**：Firestore 禁止巢狀陣列、對 map key 有限制，
-  序列化成字串後全部免疫，同步也只要比一個字串（`lastSynced`）就能判斷「這是不是我自己剛寫的」。
-  不要為了「可以在 console 讀」把它攤平成原生欄位，那會把上述限制全部請回來。
-- entry 的 doc key 用 `日期_人`：同一人同一天必定覆蓋，不會有重複列。改成流水號會破壞這個性質。
-- 人只有 `a` / `b` 兩個固定 id，顯示名稱另存 `names`。**不要把名字當 id**（改名會孤兒化所有紀錄）。
-- 單文件上限 1MB。兩人每天各量一次約可撐 20 年，現在不需要分片或外掛 blob。
-
-## 同步的四條防線（每一條都對應過真實事故，不要拆）
-
-1. **換帳號清空**：localStorage 連 `uid` 一起存。`onAuthStateChanged` 發現本次 uid 與快取不同 →
-   先 `resetState()` 再訂閱。否則 A 帳號的殘留資料會在 B 首次登入時被推上 B 的雲端。
-2. **`lastSynced` 比對**：`onSnapshot` 收到的字串等於自己剛推的就 return，避免寫入→重繪→再寫入的迴圈。
-3. **`flushPending()` 掛在 `visibilitychange` + `pagehide`**：推送有 800ms debounce，
-   iOS PWA 切背景是突然的，緩衝空窗期被凍結那次寫入就永遠沒送出。使用者會看到「已同步」卻掉資料。
-4. **錯誤訊息一律吐 `e.code || e.message`**：`permission-denied` = 規則問題、
-   `auth/unauthorized-domain` = 網域沒加。猜測式的「同步失敗（離線？）」會害遠端除錯繞遠路。
-
-規則路徑 `tenants/{uid}/{document=**}` 必須與程式碼的 `fs.collection("tenants").doc(uid)` 對得上——
-**新增任何子集合時回頭檢查 `firestore.rules`**，路徑不合會被靜默拒絕，只看到「同步失敗」。
+  序列化成字串後全部免疫。不要為了「可以在 console 讀」把它攤平成原生欄位。
+- entry 的 key 用 `日期_人`：同一人同一天必定覆蓋。改成流水號會破壞這個性質。
+- 人只有 `a` / `b` 兩個固定 id，顯示名稱另存 `names`。**不要把名字當 id**。
+- **目標是多期的**，key = 起算日。`currentGoal(V,p)` = 起算日 ≤ 今天的最後一期（卡片用）；
+  `goalAt(V,p,date)` = 起算日 ≤ 那天的最後一期（紀錄列與圖用）。圖上所有期都畫。
+  對話框「另訂新一期」= `goalKey=null`；「修改這一期」改了起算日 = 舊 key 留墓碑、新 key 寫入（搬期不是複製）。
+- 單文件上限 1MB。兩人每天各量一次約可撐 20 年，現在不需要分片。
 
 ## 核心計算：`planAt(goal, day)`
 

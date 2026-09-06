@@ -49,6 +49,9 @@
 }
 
 *{box-sizing:border-box}
+/* hidden 屬性的瀏覽器預設是 display:none，但任何作者寫的 display:flex 都會蓋過它。
+   沒有這行，.editbar 這種本身有 display 規則的元素永遠藏不起來。 */
+[hidden]{display:none!important}
 html{-webkit-text-size-adjust:100%}
 /* iOS 橡皮筋回彈會把整個合成圖層帶走;standalone 下尤其明顯 */
 html,body{overscroll-behavior-y:none}
@@ -164,7 +167,10 @@ button.ghost:hover{border-style:solid;color:var(--ink)}
 .log .n{font-weight:500}
 .log .n[data-p=a]{color:var(--a)}
 .log .n[data-p=b]{color:var(--b)}
-.log .w{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.log .w{font-family:var(--mono);font-variant-numeric:tabular-nums;display:flex;flex-direction:column;align-items:flex-end;gap:2px}
+.log .g{font-size:11px;color:var(--muted);display:flex;gap:6px;align-items:baseline;white-space:nowrap}
+.log .g .pill{font-size:11px;padding:1px 7px}
+.log .g.muted{opacity:.6}
 .log .del{border:0;background:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 4px;opacity:.5}
 .log .del:hover{opacity:1;color:var(--b)}
 
@@ -184,6 +190,21 @@ button.danger{color:var(--b);border-color:transparent}
 .err{color:var(--bad);font-size:13px;margin:12px 0 0;font-family:var(--mono);word-break:break-word}
 .err:empty{display:none}
 .acct{font-family:var(--mono);font-size:12px;color:var(--muted);word-break:break-all}
+.modebar{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:0 0 12px;
+  font-size:12px;letter-spacing:.06em;color:var(--note);font-weight:700}
+.periods{margin-top:14px;display:flex;flex-direction:column;gap:4px}
+.periods .lab{margin-bottom:4px}
+.pr{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline;
+  font-size:12px;padding:6px 8px;border-radius:6px;font-family:var(--mono);font-variant-numeric:tabular-nums}
+.pr.cur{background:var(--surface-2)}
+.pr .prn{color:var(--muted);font-family:var(--sans)}
+.pr .prn,.pr .prd,.pr .prw{white-space:nowrap}
+.pr .prb{margin-left:auto;display:flex;gap:2px;align-items:baseline}
+.pr .prd{color:var(--muted)}
+.pr .prx{border:0;background:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0 4px;font-family:var(--sans);opacity:.6}
+.pr .prx:hover{opacity:1;color:var(--ink)}
+.pr .prx.del{font-size:15px;line-height:1}
+.pr .prx.del:hover{color:var(--b)}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -191,7 +212,7 @@ button.danger{color:var(--b);border-color:transparent}
 <div class="wrap">
   <header>
     <div>
-      <h1>兩人體重刻度盤<span class="ver" id="ver">v7</span></h1>
+      <h1>兩人體重刻度盤<span class="ver" id="ver">v8</span></h1>
       <p class="sub">記一筆體重，看見自己離目標線是超前還是落後。</p>
     </div>
     <button id="sync" class="local" type="button">本機儲存</button>
@@ -244,15 +265,18 @@ button.danger{color:var(--b);border-color:transparent}
 <dialog id="goalDlg">
   <form method="dialog" id="goalForm">
     <h3 id="goalTitle">設定目標</h3>
-    <p class="hint">起始體重預設帶入最近一次量測，可以自己改。</p>
+    <p class="hint">目標一段時間會換。換了就按「另訂新一期」，舊的會留在圖上；每一筆紀錄也會對照當時那期的目標線。</p>
+    <div class="modebar"><span id="goalMode">另訂新一期</span><button type="button" class="linkish" id="goalNew" hidden>另訂新一期</button></div>
     <div class="dlg-grid">
       <div class="field"><label for="gsd">起算日</label><input type="date" id="gsd" required></div>
-      <div class="field"><label for="gsw">起始體重</label><input type="number" id="gsw" step="0.1" min="20" max="300" required></div>
+      <div class="field"><label for="gsw">起始體重</label><input type="number" id="gsw" step="0.1" min="20" max="300" inputmode="decimal" required></div>
       <div class="field"><label for="gtd">目標日期</label><input type="date" id="gtd" required></div>
-      <div class="field"><label for="gtw">目標體重</label><input type="number" id="gtw" step="0.1" min="20" max="300" required></div>
+      <div class="field"><label for="gtw">目標體重</label><input type="number" id="gtw" step="0.1" min="20" max="300" inputmode="decimal" required></div>
     </div>
+    <p class="err" id="goalErr"></p>
+    <div class="periods" id="goalList"></div>
     <div class="dlg-foot">
-      <button type="button" class="quiet danger" id="goalClear">清除目標</button>
+      <span></span>
       <div class="right">
         <button type="button" class="quiet" id="goalCancel">取消</button>
         <button type="submit" class="primary">儲存</button>
@@ -323,12 +347,22 @@ const FB = {
 };
 const CLOUD = FB.apiKey.indexOf("PASTE_") !== 0;
 
-/* ---------------- state ---------------- */
+/* ---------------- state ----------------
+   每一筆資料都帶 t（最後改動的毫秒時間戳），刪除不是真的刪、是留墓碑 {del:true,t}。
+   這樣雲端進來時可以「合併」而不是「整份覆蓋」：
+   兩人同一秒各記一筆不會互吃，Safari 重載頁面也不會讓還沒送出的改動被雲端蓋掉。
+
+   entries: { "<date>_<p>": {date, person, kg, t} | {del:true, t} }
+   goals:   { a: { "<startDate>": {startDate,startWeight,targetDate,targetWeight,t} | {del:true,t} }, b: {...} }
+            一個人可以有多期目標，key = 起算日。圖上全部畫出來，卡片用「目前這期」。
+   names:   { a, b, t }
+*/
 const PS = ["a","b"];
-const DEFAULT_NAMES = { a:"我", b:"伴侶" };
-const S = { entries:{}, goals:{}, names:Object.assign({}, DEFAULT_NAMES) };
+const DEFAULT_NAMES = { a:"我", b:"伴侶", t:0 };
+const S = { entries:{}, goals:{a:{}, b:{}}, names:Object.assign({}, DEFAULT_NAMES) };
 let range = 90, pick = "a";
 const LS = "weight-duo-v1";
+const TOMB_KEEP_DAYS = 60;   // 墓碑保留天數；超過就從 blob 剪掉，免得越長越大
 
 const $ = s => document.querySelector(s);
 const day = s => Date.UTC(+s.slice(0,4), +s.slice(5,7)-1, +s.slice(8,10)) / 86400000;
@@ -338,31 +372,66 @@ const md = s => (+s.slice(5,7)) + "/" + (+s.slice(8,10));
 const kg1 = n => (Math.round(n*10)/10).toFixed(1);
 const signed = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + kg1(Math.abs(n));
 const esc = s => String(s).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+const now = () => Date.now();
+
+/* ---------------- 資料模型：遷移 / 合併 / 活資料 ---------------- */
+// 舊格式（v7 以前）：entries 沒有 t；goals[p] 是單一物件而不是 map。
+function migrate(v){
+  const out = { entries:{}, goals:{a:{}, b:{}}, names:Object.assign({}, DEFAULT_NAMES) };
+  Object.entries(v.entries || {}).forEach(([id, e]) => {
+    out.entries[id] = e.del ? { del:true, t:e.t || 0 } : Object.assign({ t:0 }, e);
+  });
+  PS.forEach(p => {
+    const g = (v.goals || {})[p];
+    if(!g) return;
+    if(g.startDate){ out.goals[p][g.startDate] = Object.assign({ t:0 }, g); }        // 舊：單一物件
+    else Object.entries(g).forEach(([k, x]) => { out.goals[p][k] = x.del ? { del:true, t:x.t || 0 } : Object.assign({ t:0 }, x); });
+  });
+  if(v.names) out.names = Object.assign({}, DEFAULT_NAMES, v.names, { t:(v.names.t || 0) });
+  return out;
+}
+// 同一個 key，t 大的贏；平手讓雲端贏（兩邊都是舊資料 t=0 時以雲端為準）。
+function mergeMap(local, remote){
+  const out = {};
+  new Set(Object.keys(local).concat(Object.keys(remote))).forEach(k => {
+    const l = local[k], r = remote[k];
+    out[k] = !l ? r : !r ? l : ((l.t || 0) > (r.t || 0) ? l : r);
+  });
+  return out;
+}
+function merge(local, remote){
+  return {
+    entries: mergeMap(local.entries, remote.entries),
+    goals:   { a: mergeMap(local.goals.a, remote.goals.a), b: mergeMap(local.goals.b, remote.goals.b) },
+    names:   ((local.names.t || 0) > (remote.names.t || 0)) ? local.names : remote.names
+  };
+}
+// 剪掉過期墓碑後的可傳輸字串。永遠用這個推雲端 / 存本機。
+function stateBlob(){
+  const cut = now() - TOMB_KEEP_DAYS * 86400000;
+  const prune = m => { const o = {}; Object.entries(m).forEach(([k,x]) => { if(!(x.del && x.t < cut)) o[k] = x; }); return o; };
+  return JSON.stringify({ entries: prune(S.entries), goals: { a: prune(S.goals.a), b: prune(S.goals.b) }, names: S.names });
+}
+function assign(v){ S.entries = v.entries; S.goals = v.goals; S.names = v.names; }
+function applyBlob(blob){ assign(migrate(JSON.parse(blob))); }   // 本機載入用：整份取代
+function live(map){ return Object.values(map).filter(x => !x.del); }
 
 /* ---------------- 本機快取 ----------------
    永遠寫，離線也能用。連同 uid 一起存，用來偵測換帳號。       */
-function stateBlob(){ return JSON.stringify({ entries:S.entries, goals:S.goals, names:S.names }); }
-function applyBlob(blob){
-  const v = JSON.parse(blob);
-  S.entries = v.entries || {};
-  S.goals   = v.goals   || {};
-  S.names   = Object.assign({}, DEFAULT_NAMES, v.names);
-}
 function saveLocal(){
   try{ localStorage.setItem(LS, JSON.stringify({ uid: uid, state: JSON.parse(stateBlob()) })); }catch(e){}
 }
 function readLocal(){
   try{ return JSON.parse(localStorage.getItem(LS)) || {}; }catch(e){ return {}; }
 }
-function resetState(){
-  S.entries = {}; S.goals = {}; S.names = Object.assign({}, DEFAULT_NAMES);
-}
+function resetState(){ assign(migrate({})); }
 
 function status(kind, text){ const el = $("#sync"); el.className = kind; el.textContent = text; }
 
 /* ---------------- Firebase 同步 ----------------
    單一文件 tenants/{uid}，整份狀態 JSON.stringify 進 data 欄位：
-   免疫 Firestore 的巢狀陣列/型別限制，同步也只要比一個字串。 */
+   免疫 Firestore 的巢狀陣列/型別限制。收到雲端版本一律 merge 進本機，
+   合併結果若比雲端多了東西（本機有還沒送出的改動）就立刻推回去。 */
 let auth = null, fs = null, uid = null, unsub = null;
 let pushTimer = null, dirty = false, lastSynced = "";
 
@@ -381,7 +450,7 @@ function flushPending(){
   if(!dirty || !uid) return;
   const blob = stateBlob();
   dirty = false;
-  docRef().set({ data: blob, updated: Date.now() })
+  docRef().set({ data: blob, updated: now() })
     .then(() => { lastSynced = blob; status("live", "已同步"); })
     .catch(e => { dirty = true; status("err", "同步失敗：" + (e.code || e.message)); });
 }
@@ -395,15 +464,21 @@ function subscribe(){
       // 雲端還沒有這個帳號的資料。此時 S 已經是「本帳號的」——
       // 換帳號時 onAuth 已先清空，所以直接把手上的推上去是安全的。
       status("live", "雲端同步 · 首次建立");
-      if(Object.keys(S.entries).length || Object.keys(S.goals).length){ dirty = true; flushPending(); }
+      if(live(S.entries).length || live(S.goals.a).length || live(S.goals.b).length){ dirty = true; flushPending(); }
       return;
     }
     const blob = snap.data().data;
     if(typeof blob !== "string" || blob === lastSynced) return;   // 自己的寫入，不重繪
+    let remote;
+    try{ remote = migrate(JSON.parse(blob)); }catch(e){ status("err", "雲端資料讀不懂：" + e.message); return; }
     lastSynced = blob;
-    try{ applyBlob(blob); }catch(e){ status("err", "雲端資料讀不懂：" + e.message); return; }
+    assign(merge(S, remote));
     saveLocal(); render();
-    status("live", "雲端同步");
+    if(stateBlob() !== blob){          // 本機有雲端沒有的東西 → 推回去
+      dirty = true; flushPending();
+    } else {
+      status("live", "雲端同步");
+    }
   }, e => status("err", "同步中斷：" + (e.code || e.message)));
 }
 
@@ -426,7 +501,7 @@ function initFirebase(){
     }
     const cached = readLocal();
     uid = user.uid;
-    // 換帳號防污染：上一次是別的帳號（或沒登入過）就別把殘留資料帶進來。
+    // 換帳號防污染：上一次是別的帳號就別把殘留資料帶進來。
     if(cached.uid && cached.uid !== uid){ resetState(); render(); }
     saveLocal();
     status("live", "連線中…");
@@ -486,9 +561,22 @@ $("#acctOut").addEventListener("click", () => {
 });
 
 /* ---------------- derived ---------------- */
-function seriesOf(p){
-  return Object.values(S.entries).filter(e => e.person === p)
-    .sort((x,y) => x.date < y.date ? -1 : 1);
+function seriesOf(V, p){
+  return live(V.entries).filter(e => e.person === p).sort((x,y) => x.date < y.date ? -1 : 1);
+}
+function periodsOf(V, p){
+  return live(V.goals[p] || {}).sort((x,y) => x.startDate < y.startDate ? -1 : 1);
+}
+// 「目前這期」：起算日 <= 今天的最後一期；都還沒開始就取最早那期。
+function currentGoal(V, p){
+  const ps = periodsOf(V, p), t = todayStr();
+  const started = ps.filter(g => g.startDate <= t);
+  return started.length ? started[started.length-1] : (ps[0] || null);
+}
+// 某一天適用哪一期：起算日 <= 那天的最後一期。
+function goalAt(V, p, dateStr){
+  const ps = periodsOf(V, p).filter(g => g.startDate <= dateStr);
+  return ps.length ? ps[ps.length-1] : null;
 }
 // 目標線在某天「應該」的體重（線性內插，區間外夾在端點）
 function planAt(g, d){
@@ -500,13 +588,14 @@ function planAt(g, d){
 
 /* ---------------- demo data（僅在完全沒紀錄時） ---------------- */
 function demoState(){
-  const t = day(todayStr()), e = {}, g = {};
+  const t = day(todayStr()), e = {}, g = { a:{}, b:{} };
   const mk = (p, w0, drop, jitter) => {
     for(let i = 8; i >= 0; i--){
       const d = fromDay(t - i*7);
-      e[d + "_" + p] = { date:d, person:p, kg: Math.round((w0 - drop*(8-i) + Math.sin(i*2.1)*jitter)*10)/10 };
+      e[d + "_" + p] = { date:d, person:p, kg: Math.round((w0 - drop*(8-i) + Math.sin(i*2.1)*jitter)*10)/10, t:0 };
     }
-    g[p] = { startDate: fromDay(t-56), startWeight: w0, targetDate: fromDay(t+70), targetWeight: w0 - drop*20 };
+    const sd = fromDay(t-56);
+    g[p][sd] = { startDate: sd, startWeight: w0, targetDate: fromDay(t+70), targetWeight: w0 - drop*20, t:0 };
   };
   mk("a", 78.0, 0.45, 0.5);
   mk("b", 61.5, 0.30, 0.4);
@@ -515,7 +604,7 @@ function demoState(){
 
 /* ---------------- render ---------------- */
 function render(){
-  const real = Object.keys(S.entries).length > 0;
+  const real = live(S.entries).length > 0;
   const V = real ? S : demoState();
   $("#demo").hidden = real;
   document.querySelectorAll("#who button").forEach(b => b.textContent = S.names[b.dataset.p]);
@@ -528,8 +617,8 @@ function renderPeople(V, real){
   const box = $("#people"); box.innerHTML = "";
   const today = day(todayStr());
   PS.forEach(p => {
-    const ser = Object.values(V.entries).filter(e => e.person === p).sort((x,y) => x.date < y.date ? -1 : 1);
-    const last = ser[ser.length-1], g = V.goals[p];
+    const ser = seriesOf(V, p), last = ser[ser.length-1], g = currentGoal(V, p);
+    const nPeriods = periodsOf(V, p).length;
     const c = document.createElement("div");
     c.className = "card"; c.dataset.p = p;
     let h = '<h2>' + esc(V.names[p]) + '<button class="rename" data-name="' + p + '" type="button">改名</button></h2>';
@@ -549,7 +638,8 @@ function renderPeople(V, real){
       const prog = span === 0 ? 1 : Math.max(0, Math.min(1, (g.startWeight - last.kg) / span));
       const daysLeft = day(g.targetDate) - today;
       h += '<div class="rows">' +
-        row("目標", kg1(g.targetWeight) + " kg　·　" + md(g.targetDate) +
+        row("目標" + (nPeriods > 1 ? "（第 " + (periodsOf(V,p).indexOf(g)+1) + " 期）" : ""),
+            kg1(g.targetWeight) + " kg　·　" + md(g.startDate) + " → " + md(g.targetDate) +
             (daysLeft >= 0 ? "（剩 " + daysLeft + " 天）" : "（已過期）")) +
         row("距目標還有", '<b>' + kg1(Math.abs(gap)) + " kg</b>") +
         row("今天目標線上是", '<b>' + kg1(plan) + " kg</b>" +
@@ -581,10 +671,10 @@ function renderChart(V){
   const series = {}, goals = {};
   let pts = [];
   PS.forEach(p => {
-    let s = Object.values(V.entries).filter(e => e.person === p).sort((x,y) => x.date < y.date ? -1 : 1);
+    let s = seriesOf(V, p);
     if(range) s = s.filter(e => day(e.date) >= today - range);
     series[p] = s; pts = pts.concat(s);
-    if(V.goals[p]) goals[p] = V.goals[p];
+    goals[p] = periodsOf(V, p);                    // 所有期都畫
   });
 
   if(!pts.length){
@@ -597,12 +687,12 @@ function renderChart(V){
   let x0 = Math.min.apply(null, pts.map(e => day(e.date)));
   let x1 = Math.max.apply(null, pts.map(e => day(e.date)));
   let ys = pts.map(e => e.kg);
-  Object.keys(goals).forEach(p => {
-    const g = goals[p];
-    x0 = Math.min(x0, Math.max(x0, day(g.startDate)));
+  PS.forEach(p => goals[p].forEach(g => {
+    // 只把「跟顯示區間有交集」的目標期納入軸範圍，很久以前的舊期不要把圖撐爆
+    if(day(g.targetDate) < x0) return;
     x1 = Math.max(x1, day(g.targetDate));
-    ys.push(planAt(g, x0), planAt(g, x1));
-  });
+    ys.push(planAt(g, Math.max(x0, day(g.startDate))), planAt(g, day(g.targetDate)));
+  }));
   x1 = Math.max(x1, today);
   if(x1 - x0 < 7) x1 = x0 + 7;
 
@@ -625,10 +715,11 @@ function renderChart(V){
          '" stroke="var(--line)" stroke-width="1" stroke-dasharray="2 4"/>';
     g += text(X(today), P.t - 4, "今天", 10, "middle");
   }
-  PS.forEach(p => {
-    const gl = goals[p]; if(!gl) return;
+  let anyGoal = { a:false, b:false };
+  PS.forEach(p => goals[p].forEach(gl => {
     const a = Math.max(x0, day(gl.startDate)), b = Math.min(x1, day(gl.targetDate));
     if(b <= a) return;
+    anyGoal[p] = true;
     g += '<line x1="' + X(a) + '" y1="' + Y(planAt(gl,a)) + '" x2="' + X(b) + '" y2="' + Y(planAt(gl,b)) +
          '" stroke="var(--' + p + ')" stroke-width="1.5" stroke-dasharray="5 5" opacity="0.45"/>';
     if(day(gl.targetDate) <= x1){
@@ -636,7 +727,7 @@ function renderChart(V){
            ')" stroke-width="1.5" opacity="0.8"/>';
       if(!narrow) g += text(X(b) + 8, Y(gl.targetWeight) + 4, kg1(gl.targetWeight), 10, "start", "var(--" + p + ")");
     }
-  });
+  }));
   PS.forEach(p => {
     const s = series[p]; if(!s.length) return;
     const dash = p === "b" ? ' stroke-dasharray="7 4"' : "";
@@ -664,9 +755,9 @@ function renderChart(V){
   $("#legend").innerHTML = PS.map(p =>
       '<span class="leg"><i style="border-top-color:var(--' + p + ');border-top-style:' +
       (p === "b" ? "dashed" : "solid") + '"></i>' + esc(V.names[p]) + ' 實際</span>').join("") +
-    PS.filter(p => goals[p]).map(p =>
+    PS.filter(p => anyGoal[p]).map(p =>
       '<span class="leg"><i style="border-top-color:var(--' + p + ');border-top-style:dotted;opacity:.6"></i>' +
-      esc(V.names[p]) + ' 目標線</span>').join("");
+      esc(V.names[p]) + ' 目標線' + (goals[p].length > 1 ? '（' + goals[p].length + ' 期）' : '') + '</span>').join("");
 }
 function niceStep(span){
   const raw = span / 5, mag = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / mag;
@@ -681,18 +772,27 @@ function text(x,y,t,size,anchor,fill,weight){
 /* ---------------- log ---------------- */
 function renderLog(V, real){
   const el = $("#log");
-  const list = Object.entries(V.entries).map(([id,e]) => Object.assign({id}, e))
+  const list = Object.entries(V.entries).filter(([,e]) => !e.del).map(([id,e]) => Object.assign({id}, e))
     .sort((x,y) => x.date < y.date ? 1 : x.date > y.date ? -1 : (x.person < y.person ? -1 : 1)).slice(0, 24);
   if(!list.length){ el.innerHTML = '<div class="empty">還沒有任何紀錄。</div>'; return; }
-  el.innerHTML = list.map(e =>
-    '<div class="li' + (editing === e.id ? ' editing' : '') + '"><span class="d">' + e.date + '</span>' +
-    '<span class="n" data-p="' + e.person + '">' + esc(V.names[e.person]) + '</span>' +
-    '<span class="w">' + kg1(e.kg) + ' kg</span>' +
-    (real
-      ? '<button class="edit" data-edit="' + esc(e.id) + '" title="修改這筆" type="button">修改</button>' +
-        '<button class="del" data-del="' + esc(e.id) + '" title="刪除這筆" type="button">×</button>'
-      : '<span></span><span></span>') +
-    '</div>').join("");
+  el.innerHTML = list.map(e => {
+    const gl = goalAt(V, e.person, e.date);
+    let goalHtml = '<span class="g muted">那天沒有目標</span>';
+    if(gl){
+      const plan = planAt(gl, day(e.date)), diff = e.kg - plan;
+      goalHtml = '<span class="g">目標線 ' + kg1(plan) +
+        ' <span class="pill ' + (diff <= 0 ? "ahead" : "behind") + '">' +
+        (diff <= 0 ? "超前 " : "落後 ") + kg1(Math.abs(diff)) + '</span></span>';
+    }
+    return '<div class="li' + (editing === e.id ? ' editing' : '') + '"><span class="d">' + e.date + '</span>' +
+      '<span class="n" data-p="' + e.person + '">' + esc(V.names[e.person]) + '</span>' +
+      '<span class="w">' + kg1(e.kg) + ' kg' + goalHtml + '</span>' +
+      (real
+        ? '<button class="edit" data-edit="' + esc(e.id) + '" title="修改這筆" type="button">修改</button>' +
+          '<button class="del" data-del="' + esc(e.id) + '" title="刪除這筆" type="button">×</button>'
+        : '<span></span><span></span>') +
+      '</div>';
+  }).join("");
 }
 
 /* ---------------- interactions ---------------- */
@@ -710,10 +810,10 @@ $("#who").addEventListener("click", ev => {
 
 /* 修改既有紀錄:直接複用上方那張表單,不另外開一個編輯器。
    doc key 是「日期_人」,所以存回去就是覆蓋;
-   但若使用者把日期或人也改了,key 會變成另一筆——舊的那筆要一併移除,否則會分裂成兩筆。 */
+   但若使用者把日期或人也改了,key 會變成另一筆——舊的那筆要留墓碑,否則會分裂成兩筆。 */
 let editing = null;
 function startEdit(id){
-  const e = S.entries[id]; if(!e) return;
+  const e = S.entries[id]; if(!e || e.del) return;
   editing = id;
   $("#date").value = e.date;
   pick = e.person;
@@ -739,9 +839,9 @@ $("#form").addEventListener("submit", ev => {
   ev.preventDefault();
   const date = $("#date").value, kg = parseFloat($("#kg").value);
   if(!date || !(kg > 0)) return;
-  const id = date + "_" + pick, was = editing, existed = !!S.entries[id];
-  S.entries[id] = { date, person: pick, kg: Math.round(kg*10)/10 };
-  if(was && was !== id) delete S.entries[was];      // 日期或人被改掉了
+  const id = date + "_" + pick, was = editing, existed = !!(S.entries[id] && !S.entries[id].del);
+  S.entries[id] = { date, person: pick, kg: Math.round(kg*10)/10, t: now() };
+  if(was && was !== id) S.entries[was] = { del:true, t: now() };      // 日期或人被改掉了 → 舊的留墓碑
   stopEdit(false);
   $("#kg").value = ""; $("#kg").focus();
   render(); touch();
@@ -755,8 +855,11 @@ document.addEventListener("click", ev => {
   const del = ev.target.closest("[data-del]");
   if(del){
     if(editing === del.dataset.del) stopEdit(true); // 正在改的那筆被刪了
-    delete S.entries[del.dataset.del]; render(); touch(); toast("已刪除一筆紀錄"); return;
+    S.entries[del.dataset.del] = { del:true, t: now() };
+    render(); touch(); toast("已刪除一筆紀錄"); return;
   }
+  const gdel = ev.target.closest("[data-gdel]");
+  if(gdel){ deleteGoalPeriod(gdel.dataset.gdel); return; }
   const gp = ev.target.closest("[data-goal]"); if(gp) return openGoal(gp.dataset.goal);
   const np = ev.target.closest("[data-name]"); if(np) return openName(np.dataset.name);
 });
@@ -768,29 +871,72 @@ $("#chips").addEventListener("click", ev => {
   render();
 });
 
-let goalFor = "a";
+/* ---------------- 目標對話框：多期 ----------------
+   goalKey = 正在編輯的那期的起算日；null = 另訂新一期。
+   儲存時若起算日被改了，舊 key 留墓碑、新 key 寫入（= 把那期搬過去，不是複製）。 */
+let goalFor = "a", goalKey = null;
+function fillGoalForm(g){
+  const ser = seriesOf(S, goalFor), last = ser[ser.length-1], t = day(todayStr());
+  $("#gsd").value = g ? g.startDate : todayStr();
+  $("#gsw").value = g ? g.startWeight : (last ? last.kg : "");
+  $("#gtd").value = g ? g.targetDate : fromDay(t + 84);
+  $("#gtw").value = g ? g.targetWeight : "";
+  $("#goalErr").textContent = "";
+  $("#goalMode").textContent = g ? "修改這一期" : "另訂新一期";
+  $("#goalNew").hidden = !g;
+}
+function renderGoalList(){
+  const ps = periodsOf(S, goalFor), el = $("#goalList");
+  if(!ps.length){ el.innerHTML = ""; return; }
+  el.innerHTML = '<div class="lab">歷史目標</div>' + ps.map((g,i) =>
+    '<div class="pr' + (g.startDate === goalKey ? ' cur' : '') + '">' +
+      '<span class="prn">第 ' + (i+1) + ' 期</span>' +
+      '<span class="prd">' + md(g.startDate) + ' → ' + md(g.targetDate) + '</span>' +
+      '<span class="prw">' + kg1(g.startWeight) + '→' + kg1(g.targetWeight) + '</span>' +
+      '<span class="prb"><button type="button" class="prx" data-gedit="' + g.startDate + '" title="編輯這期">修改</button>' +
+      '<button type="button" class="prx del" data-gdel="' + g.startDate + '" title="刪除這期">×</button></span>' +
+    '</div>').join("");
+}
 function openGoal(p){
   goalFor = p;
-  const g = S.goals[p] || {}, ser = seriesOf(p), last = ser[ser.length-1], t = day(todayStr());
+  const cur = currentGoal(S, p);
+  goalKey = cur ? cur.startDate : null;
   $("#goalTitle").textContent = S.names[p] + " 的目標";
-  $("#gsd").value = g.startDate || todayStr();
-  $("#gsw").value = g.startWeight != null ? g.startWeight : (last ? last.kg : "");
-  $("#gtd").value = g.targetDate || fromDay(t + 84);
-  $("#gtw").value = g.targetWeight != null ? g.targetWeight : "";
+  fillGoalForm(cur);
+  renderGoalList();
   $("#goalDlg").showModal();
 }
-$("#goalCancel").addEventListener("click", () => $("#goalDlg").close());
-$("#goalClear").addEventListener("click", () => {
-  delete S.goals[goalFor]; $("#goalDlg").close(); render(); touch();
-  toast("已清除 " + S.names[goalFor] + " 的目標");
+$("#goalList").addEventListener("click", ev => {
+  const b = ev.target.closest("[data-gedit]"); if(!b) return;
+  goalKey = b.dataset.gedit;
+  fillGoalForm(S.goals[goalFor][goalKey]);
+  renderGoalList();
 });
-$("#goalForm").addEventListener("submit", () => {
+$("#goalNew").addEventListener("click", () => { goalKey = null; fillGoalForm(null); renderGoalList(); $("#gtw").focus(); });
+$("#goalCancel").addEventListener("click", () => $("#goalDlg").close());
+function deleteGoalPeriod(key){
+  S.goals[goalFor][key] = { del:true, t: now() };
+  if(goalKey === key){ goalKey = null; fillGoalForm(null); }
+  renderGoalList(); render(); touch();
+  toast("已刪除 " + S.names[goalFor] + " 的一期目標");
+}
+$("#goalForm").addEventListener("submit", ev => {
   const g = { startDate: $("#gsd").value, startWeight: parseFloat($("#gsw").value),
               targetDate: $("#gtd").value, targetWeight: parseFloat($("#gtw").value) };
-  if(!g.startDate || !g.targetDate || !(g.startWeight > 0) || !(g.targetWeight > 0)) return;
-  if(day(g.targetDate) <= day(g.startDate)){ toast("目標日期要晚於起算日。", true); return; }
-  S.goals[goalFor] = g; render(); touch();
-  toast("已設定 " + S.names[goalFor] + " 的目標：" + kg1(g.targetWeight) + " kg");
+  // 驗證失敗要擋住對話框關閉並把原因寫在框裡——method="dialog" 的表單送出後預設會直接關掉，
+  // 使用者只會看到「按了沒反應」。
+  let err = "";
+  if(!g.startDate || !g.targetDate) err = "起算日和目標日期都要填。";
+  else if(!(g.startWeight > 0) || !(g.targetWeight > 0)) err = "起始體重和目標體重都要是大於 0 的數字。";
+  else if(day(g.targetDate) <= day(g.startDate)) err = "目標日期要晚於起算日。";
+  else if(goalKey !== g.startDate && S.goals[goalFor][g.startDate] && !S.goals[goalFor][g.startDate].del)
+    err = "已經有一期是從 " + md(g.startDate) + " 起算的，改那期或換個起算日。";
+  if(err){ ev.preventDefault(); $("#goalErr").textContent = err; return; }
+
+  if(goalKey && goalKey !== g.startDate) S.goals[goalFor][goalKey] = { del:true, t: now() };   // 搬期
+  S.goals[goalFor][g.startDate] = Object.assign({ t: now() }, g);
+  render(); touch();
+  toast("已" + (goalKey ? "更新" : "設定") + " " + S.names[goalFor] + " 的目標：" + kg1(g.targetWeight) + " kg（" + md(g.targetDate) + "）");
 });
 
 let nameFor = "a";
@@ -798,7 +944,7 @@ function openName(p){ nameFor = p; $("#nameInput").value = S.names[p]; $("#nameD
 $("#nameCancel").addEventListener("click", () => $("#nameDlg").close());
 $("#nameForm").addEventListener("submit", () => {
   const v = $("#nameInput").value.trim(); if(!v) return;
-  S.names[nameFor] = v; render(); touch();
+  S.names[nameFor] = v; S.names.t = now(); render(); touch();
 });
 
 let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 120); });
@@ -828,19 +974,47 @@ if("serviceWorker" in navigator && location.protocol !== "file:"){
 
 /* ---------------- self-check（開 console 看，不影響畫面） ---------------- */
 (function selfCheck(){
+  const A = console.assert.bind(console);
+  // planAt
   const g = { startDate:"2026-01-01", startWeight:80, targetDate:"2026-03-02", targetWeight:74 }; // 60 天 −6kg
   const at = d => Math.round(planAt(g, day(d))*100)/100;
-  console.assert(at("2026-01-01") === 80, "起算日應為起始體重");
-  console.assert(at("2026-03-02") === 74, "目標日應為目標體重");
-  console.assert(at("2026-01-31") === 77, "中點應為 77，實得 " + at("2026-01-31"));
-  console.assert(at("2025-12-01") === 80 && at("2026-06-01") === 74, "區間外應夾在端點");
-  const flat = { startDate:"2026-01-01", startWeight:70, targetDate:"2026-01-01", targetWeight:70 };
-  console.assert(planAt(flat, day("2026-02-01")) === 70, "零長度區間不應除以零");
-  console.assert(signed(-1.24) === "−1.2" && signed(0) === "±0.0", "signed 格式");
-  console.assert(day("2026-01-02") - day("2026-01-01") === 1, "日期差");
+  A(at("2026-01-01") === 80, "起算日應為起始體重");
+  A(at("2026-03-02") === 74, "目標日應為目標體重");
+  A(at("2026-01-31") === 77, "中點應為 77，實得 " + at("2026-01-31"));
+  A(at("2025-12-01") === 80 && at("2026-06-01") === 74, "區間外應夾在端點");
+  A(planAt({ startDate:"2026-01-01", startWeight:70, targetDate:"2026-01-01", targetWeight:70 }, day("2026-02-01")) === 70, "零長度區間不應除以零");
+  A(signed(-1.24) === "−1.2" && signed(0) === "±0.0", "signed 格式");
+  A(day("2026-01-02") - day("2026-01-01") === 1, "日期差");
+
+  // 遷移：舊格式（無 t、goals 單一物件）
+  const old = migrate({ entries:{ "2026-01-01_a":{date:"2026-01-01",person:"a",kg:70} }, goals:{ a:g }, names:{a:"X",b:"Y"} });
+  A(old.entries["2026-01-01_a"].t === 0, "舊 entry 補 t=0");
+  A(old.goals.a["2026-01-01"] && old.goals.a["2026-01-01"].targetWeight === 74, "舊單一目標 → 以起算日為 key");
+  A(old.names.a === "X" && old.names.t === 0, "names 遷移");
+  A(JSON.stringify(migrate(old)) === JSON.stringify(old), "migrate 對新格式應為恆等");
+
+  // 合併：t 大的贏、墓碑會贏過舊資料、不同 key 取聯集、平手雲端贏
+  const L = migrate({ entries:{ x:{date:"2026-01-01",person:"a",kg:70,t:5}, y:{date:"2026-01-02",person:"a",kg:71,t:1}, z:{date:"2026-01-03",person:"b",kg:60,t:3} } });
+  const R = migrate({ entries:{ x:{date:"2026-01-01",person:"a",kg:99,t:2}, y:{del:true,t:9},                            w:{date:"2026-01-04",person:"b",kg:61,t:3} } });
+  const M = merge(L, R);
+  A(M.entries.x.kg === 70, "本機較新 → 本機贏");
+  A(M.entries.y.del === true, "雲端較新的墓碑 → 刪除贏");
+  A(M.entries.z && M.entries.w, "不同 key 取聯集（兩人同時各記一筆都要留下）");
+  const T = merge(migrate({ entries:{ q:{date:"2026-01-01",person:"a",kg:1,t:0} } }), migrate({ entries:{ q:{date:"2026-01-01",person:"a",kg:2,t:0} } }));
+  A(T.entries.q.kg === 2, "平手雲端贏");
+  A(JSON.stringify(merge(M, M)) === JSON.stringify(M), "merge 冪等");
+
+  // 多期目標：某天適用的是「起算日 <= 那天」的最後一期
+  const V = migrate({ goals:{ a:{ "2026-01-01":{startDate:"2026-01-01",startWeight:80,targetDate:"2026-02-01",targetWeight:78,t:0},
+                                   "2026-03-01":{startDate:"2026-03-01",startWeight:78,targetDate:"2026-05-01",targetWeight:74,t:0} } } });
+  A(goalAt(V,"a","2026-01-15").targetWeight === 78, "一月適用第一期");
+  A(goalAt(V,"a","2026-02-15").targetWeight === 78, "兩期之間仍沿用第一期");
+  A(goalAt(V,"a","2026-04-01").targetWeight === 74, "四月適用第二期");
+  A(goalAt(V,"a","2025-12-01") === null, "第一期之前沒有目標");
+
   // 同步 blob 必須可完整往返
   const before = stateBlob(); applyBlob(before);
-  console.assert(stateBlob() === before, "applyBlob(stateBlob()) 必須是恆等");
+  A(stateBlob() === before, "applyBlob(stateBlob()) 必須是恆等");
 })();
 </script>
 </body>
