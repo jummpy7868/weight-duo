@@ -80,15 +80,17 @@ h1{font-family:var(--serif);font-size:25px;font-weight:600;margin:0;letter-spaci
 .entry{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;
   box-shadow:var(--shadow);display:grid;gap:14px;
   grid-template-columns:1fr 1fr minmax(0,1.1fr) auto;align-items:end}
-@media(max-width:720px){.entry{grid-template-columns:1fr 1fr}.entry .who,.entry button.primary{grid-column:1/-1}}
+@media(max-width:720px){.entry{grid-template-columns:minmax(0,1.45fr) minmax(0,1fr)}.entry button.primary{grid-column:1/-1}}
 .field{display:flex;flex-direction:column;gap:6px;min-width:0}
 label,.lab{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:500}
 /* 控制項高度一律釘成 --ctl,不要相信各平台的固有高度:
    iOS 的原生 input[type=date] 比按鈕高好幾 px,那一列是底部對齊,
    高度一不同標籤就錯開。順帶滿足 44px 觸控目標。 */
 :root{ --ctl:44px }
+/* 表單輸入框用 sans 不用 mono:iOS 日期欄的「年月日」一定落在 CJK 字體,
+   跟 mono 數字並排會不同高、不同基線。儀表讀數(大字、表格)才用 mono。16px 是 iOS 不自動縮放的門檻,別動。 */
 input[type=date],input[type=number],input[type=text],input[type=email],input[type=password]{
-  font-family:var(--mono);font-size:16px;color:var(--ink);background:var(--surface);
+  font-family:var(--sans);font-variant-numeric:tabular-nums;font-size:16px;color:var(--ink);background:var(--surface);
   border:1px solid var(--line);border-radius:7px;padding:0 11px;width:100%;min-width:0;
   height:var(--ctl);line-height:normal;-webkit-appearance:none;appearance:none}
 input[type=date]{ display:block }   /* iOS 預設 inline,會多出基線間隙 */
@@ -179,7 +181,7 @@ dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface)
 dialog::backdrop{background:rgba(20,26,25,.5)}
 dialog h3{font-family:var(--serif);margin:0 0 4px;font-size:18px;font-weight:600}
 dialog p.hint{margin:0 0 16px;font-size:13px;color:var(--muted)}
-.dlg-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dlg-grid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px}   /* 日期欄要寬,iOS 的 年月日 格式很長 */
 .dlg-grid .full{grid-column:1/-1}
 .dlg-foot{display:flex;justify-content:space-between;gap:10px;margin-top:18px;align-items:center;flex-wrap:wrap}
 .dlg-foot .right{display:flex;gap:10px}
@@ -212,7 +214,7 @@ button.danger{color:var(--b);border-color:transparent}
 <div class="wrap">
   <header>
     <div>
-      <h1>兩人體重刻度盤<span class="ver" id="ver">v8</span></h1>
+      <h1>兩人體重刻度盤<span class="ver" id="ver">v9</span></h1>
       <p class="sub">記一筆體重，看見自己離目標線是超前還是落後。</p>
     </div>
     <button id="sync" class="local" type="button">本機儲存</button>
