@@ -102,6 +102,12 @@ button.primary:hover{opacity:.85}
 .toast{font-size:13px;color:var(--good);grid-column:1/-1;margin:-4px 0 0;min-height:0}
 .toast:empty{display:none}
 .toast.warn{color:var(--note)}
+.editbar{grid-column:1/-1;margin:-4px 0 0;font-size:13px;color:var(--note);
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.editbar b{font-weight:700}
+.linkish{border:0;background:none;color:var(--muted);font-size:13px;cursor:pointer;
+  text-decoration:underline;font-family:var(--sans);padding:2px 4px}
+.linkish:hover{color:var(--ink)}
 
 .people{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:660px){.people{grid-template-columns:1fr}}
@@ -147,8 +153,12 @@ button.ghost:hover{border-style:solid;color:var(--ink)}
 .demo{font-size:12px;color:var(--note);margin:0 0 8px;font-weight:500}
 
 .log{display:flex;flex-direction:column}
-.log .li{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:baseline;
+.log .li{display:grid;grid-template-columns:auto 1fr auto auto auto;gap:12px;align-items:baseline;
   padding:8px 2px;border-bottom:1px solid var(--line-soft);font-size:14px}
+.log .li.editing{background:var(--surface-2);border-radius:6px;padding-left:6px;padding-right:6px}
+.log .edit{border:0;background:none;color:var(--muted);cursor:pointer;font-size:14px;line-height:1;
+  padding:0 4px;opacity:.55;font-family:var(--sans)}
+.log .edit:hover{opacity:1;color:var(--a)}
 .log .li:last-child{border-bottom:0}
 .log .d{font-family:var(--mono);color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
 .log .n{font-weight:500}
@@ -181,7 +191,7 @@ button.danger{color:var(--b);border-color:transparent}
 <div class="wrap">
   <header>
     <div>
-      <h1>兩人體重刻度盤<span class="ver" id="ver">v5</span></h1>
+      <h1>兩人體重刻度盤<span class="ver" id="ver">v6</span></h1>
       <p class="sub">記一筆體重，看見自己離目標線是超前還是落後。</p>
     </div>
     <button id="sync" class="local" type="button">本機儲存</button>
@@ -203,7 +213,9 @@ button.danger{color:var(--b);border-color:transparent}
       <label for="kg">體重（公斤）</label>
       <input type="number" id="kg" step="0.1" min="20" max="300" inputmode="decimal" placeholder="65.4" required>
     </div>
-    <button class="primary" type="submit">記錄</button>
+    <button class="primary" type="submit" id="submitBtn">記錄</button>
+    <p class="editbar" id="editBar" hidden>正在修改 <b id="editWhat"></b> 的紀錄
+      <button type="button" class="linkish" id="editCancel">取消</button></p>
     <p class="toast" id="toast"></p>
   </form>
 
@@ -673,10 +685,13 @@ function renderLog(V, real){
     .sort((x,y) => x.date < y.date ? 1 : x.date > y.date ? -1 : (x.person < y.person ? -1 : 1)).slice(0, 24);
   if(!list.length){ el.innerHTML = '<div class="empty">還沒有任何紀錄。</div>'; return; }
   el.innerHTML = list.map(e =>
-    '<div class="li"><span class="d">' + e.date + '</span>' +
+    '<div class="li' + (editing === e.id ? ' editing' : '') + '"><span class="d">' + e.date + '</span>' +
     '<span class="n" data-p="' + e.person + '">' + esc(V.names[e.person]) + '</span>' +
     '<span class="w">' + kg1(e.kg) + ' kg</span>' +
-    (real ? '<button class="del" data-del="' + esc(e.id) + '" title="刪除" type="button">×</button>' : '<span></span>') +
+    (real
+      ? '<button class="edit" data-edit="' + esc(e.id) + '" title="修改這筆" type="button">修改</button>' +
+        '<button class="del" data-del="' + esc(e.id) + '" title="刪除這筆" type="button">×</button>'
+      : '<span></span><span></span>') +
     '</div>').join("");
 }
 
@@ -693,20 +708,55 @@ $("#who").addEventListener("click", ev => {
   document.querySelectorAll("#who button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.p === pick)));
 });
 
+/* 修改既有紀錄:直接複用上方那張表單,不另外開一個編輯器。
+   doc key 是「日期_人」,所以存回去就是覆蓋;
+   但若使用者把日期或人也改了,key 會變成另一筆——舊的那筆要一併移除,否則會分裂成兩筆。 */
+let editing = null;
+function startEdit(id){
+  const e = S.entries[id]; if(!e) return;
+  editing = id;
+  $("#date").value = e.date;
+  pick = e.person;
+  document.querySelectorAll("#who button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.p === pick)));
+  $("#kg").value = e.kg;
+  $("#submitBtn").textContent = "儲存修改";
+  $("#editWhat").textContent = S.names[e.person] + " " + md(e.date) + " 的 " + kg1(e.kg) + " kg";
+  $("#editBar").hidden = false;
+  render();
+  $("#form").scrollIntoView({ block:"start", behavior:"smooth" });
+  $("#kg").focus(); $("#kg").select();
+}
+function stopEdit(clearForm){
+  editing = null;
+  $("#submitBtn").textContent = "記錄";
+  $("#editBar").hidden = true;
+  // 送出後不重設日期:接著要記另一半同一天的體重,日期留著才順手。
+  if(clearForm){ $("#kg").value = ""; $("#date").value = todayStr(); }
+}
+$("#editCancel").addEventListener("click", () => { stopEdit(true); render(); });
+
 $("#form").addEventListener("submit", ev => {
   ev.preventDefault();
   const date = $("#date").value, kg = parseFloat($("#kg").value);
   if(!date || !(kg > 0)) return;
-  const id = date + "_" + pick, existed = !!S.entries[id];
+  const id = date + "_" + pick, was = editing, existed = !!S.entries[id];
   S.entries[id] = { date, person: pick, kg: Math.round(kg*10)/10 };
+  if(was && was !== id) delete S.entries[was];      // 日期或人被改掉了
+  stopEdit(false);
   $("#kg").value = ""; $("#kg").focus();
   render(); touch();
-  toast((existed ? "已更新 " : "已記下 ") + S.names[pick] + " " + md(date) + " 的 " + kg1(kg) + " kg");
+  toast((was ? "已修改 " : existed ? "已更新 " : "已記下 ") +
+        S.names[pick] + " " + md(date) + " 的 " + kg1(kg) + " kg");
 });
 
 document.addEventListener("click", ev => {
+  const edit = ev.target.closest("[data-edit]");
+  if(edit) return startEdit(edit.dataset.edit);
   const del = ev.target.closest("[data-del]");
-  if(del){ delete S.entries[del.dataset.del]; render(); touch(); toast("已刪除一筆紀錄"); return; }
+  if(del){
+    if(editing === del.dataset.del) stopEdit(true); // 正在改的那筆被刪了
+    delete S.entries[del.dataset.del]; render(); touch(); toast("已刪除一筆紀錄"); return;
+  }
   const gp = ev.target.closest("[data-goal]"); if(gp) return openGoal(gp.dataset.goal);
   const np = ev.target.closest("[data-name]"); if(np) return openName(np.dataset.name);
 });
