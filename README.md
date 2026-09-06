@@ -1,0 +1,83 @@
+# 兩人體重刻度盤
+
+兩個人共用的體重追蹤面板：記體重、訂減重目標，圖上直接看出離目標線是**超前還是落後**。
+
+單檔 HTML、零建置、零依賴（Firebase SDK 從 CDN 載）。
+線上版：https://jummpy7868.github.io/weight-duo/
+
+---
+
+## 現在就能用
+
+還沒接 Firebase 時，app 會自動退成**單機模式**，資料存在該裝置的 localStorage，功能完全一樣，
+只是兩支手機不同步。右上角的指示燈會顯示目前是哪一種模式。
+
+## 接上雲端同步（約 4 分鐘，只做一次）
+
+### 1. 建 Firebase 專案
+
+1. https://console.firebase.google.com → **建立專案** → 取個名字（例如 `weight-duo`）→ Google Analytics 可以關掉。
+2. 專案首頁點 **`</>`（網頁）** 圖示新增網頁應用程式 → 取個暱稱 → 註冊。
+3. 畫面會給你一段 `firebaseConfig`，**這段就是要貼回來的東西**。
+
+> 多個 Google 帳號時，網址列的 `/u/0/` 要對。出現「專案不存在」多半是帳號序號錯了，改 `/u/1/` 試試。
+
+### 2. 開啟 Email 登入
+
+左側 **Authentication** → 開始使用 → **Sign-in method** → 啟用 **電子郵件/密碼**。
+
+### 3. 加入授權網域（漏了會噴 `auth/unauthorized-domain`）
+
+**Authentication → Settings → Authorized domains → 新增網域**，加入：
+
+```
+jummpy7868.github.io
+```
+
+### 4. 建 Firestore 並貼上規則
+
+1. 左側 **Firestore Database** → 建立資料庫 → **選「正式版模式」**（不要測試模式，30 天後會全鎖）→ 位置選 `asia-east1`。
+2. 切到 **規則** 分頁，把 [`firestore.rules`](firestore.rules) 的內容整段貼上 → 發布。
+
+### 5. 把 config 填進 `index.html`
+
+打開 `index.html`，找到最上面的 `const FB = {`，換成第 1 步拿到的四個值：
+
+```js
+const FB = {
+  apiKey:     "AIza....",
+  authDomain: "weight-duo-xxxx.firebaseapp.com",
+  projectId:  "weight-duo-xxxx",
+  appId:      "1:123...:web:abc..."
+};
+```
+
+commit + push，GitHub Pages 一分鐘內就會更新。
+
+> `apiKey` 是**公開設計**的，放進公開 repo 沒問題。安全性來自 Auth 帳號密碼 + 上面那份 Firestore 規則，不是靠藏 config。
+
+### 6. 兩個人登入同一組帳號
+
+右上角指示燈 → **建立帳號**（第一次，任一人做）→ 另一半用**同一組 email／密碼**在自己手機登入。
+之後任一台記錄，另一台即時看到。
+
+---
+
+## 用法
+
+| 動作 | 怎麼做 |
+|---|---|
+| 記一筆 | 上方選日期 → 選誰 → 填公斤 → 記錄。同一人同一天再記是**覆蓋**，不會多一列 |
+| 訂目標 | 卡片上的「設定目標」→ 填目標體重 + 目標日期 |
+| 改稱呼 | 卡片標題旁的「改名」 |
+| 刪紀錄 | 最近紀錄列表右側的 × |
+| 看區間 | 圖表右上：近 30 天 / 近 90 天 / 全部 |
+
+**「超前 / 落後」怎麼算**：目標線是從「起算日的體重」到「目標日的體重」拉一條直線。
+今天在這條線上對應到某個公斤數，你的實際體重比它輕就是超前，比它重就是落後。
+所以「與目標的差距」在圖上是看得到的垂直距離，不只是一個數字。
+
+## 手機上用
+
+用 Safari / Chrome 開網址 → 分享 → **加入主畫面**，就像一般 app 一樣開。
+（沒有做 Service Worker，所以離線只能看已載入過的頁面。）

@@ -1,0 +1,5 @@
+# Artifact 版本(已被 index.html 取代,CSP 擋 Firebase 所以無法沿用)
+weight-panel.html
+.DS_Store
+Thumbs.db
+node_modules/

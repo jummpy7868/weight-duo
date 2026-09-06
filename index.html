@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#F2F4F3">
+<title>兩人體重刻度盤</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@600&display=swap">
+<style>
+:root{
+  --ground:#F2F4F3; --surface:#FFFFFF; --surface-2:#E9EDEB;
+  --ink:#1D2422; --muted:#63706D; --line:#D3DAD8; --line-soft:#E3E8E6;
+  --a:#2F6F8F; --b:#9B3D6E;
+  --a-soft:rgba(47,111,143,.12); --b-soft:rgba(155,61,110,.12);
+  --note:#B4761E; --good:#3B7A5A; --bad:#A33A3A;
+  --shadow:0 1px 2px rgba(29,36,34,.05), 0 6px 18px rgba(29,36,34,.05);
+  --serif:"Noto Serif TC",Georgia,serif;
+  --sans:"IBM Plex Sans","Noto Sans TC",-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono","Noto Sans TC",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --ground:#141A19; --surface:#1C2423; --surface-2:#242D2C;
+    --ink:#E6EBE9; --muted:#93A09D; --line:#333F3D; --line-soft:#28322F;
+    --a:#6FB6D6; --b:#E08AB0;
+    --a-soft:rgba(111,182,214,.16); --b-soft:rgba(224,138,176,.16);
+    --note:#E8A24C; --good:#7FC0A0; --bad:#E08585;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#141A19; --surface:#1C2423; --surface-2:#242D2C;
+  --ink:#E6EBE9; --muted:#93A09D; --line:#333F3D; --line-soft:#28322F;
+  --a:#6FB6D6; --b:#E08AB0;
+  --a-soft:rgba(111,182,214,.16); --b-soft:rgba(224,138,176,.16);
+  --note:#E8A24C; --good:#7FC0A0; --bad:#E08585;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25);
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;padding:26px 18px calc(64px + env(safe-area-inset-bottom))}
+.wrap{max-width:940px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+
+header{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;
+  border-bottom:1px solid var(--line);padding-bottom:14px}
+h1{font-family:var(--serif);font-size:25px;font-weight:600;margin:0;letter-spacing:.02em;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px;margin:2px 0 0}
+#sync{font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--muted);cursor:pointer;
+  display:flex;align-items:center;gap:7px;white-space:nowrap;background:none;border:0;padding:6px 2px}
+#sync::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--muted);flex:none}
+#sync.live::before{background:var(--good)}
+#sync.local::before{background:var(--note)}
+#sync.err::before{background:var(--bad)}
+#sync.err{color:var(--bad)}
+#sync:hover{color:var(--ink)}
+
+.entry{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;
+  box-shadow:var(--shadow);display:grid;gap:14px;
+  grid-template-columns:1fr 1fr minmax(0,1.1fr) auto;align-items:end}
+@media(max-width:720px){.entry{grid-template-columns:1fr 1fr}.entry .who,.entry button.primary{grid-column:1/-1}}
+.field{display:flex;flex-direction:column;gap:6px;min-width:0}
+label,.lab{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:500}
+input[type=date],input[type=number],input[type=text],input[type=email],input[type=password]{
+  font-family:var(--mono);font-size:16px;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:7px;padding:9px 11px;width:100%;min-width:0}
+input:focus-visible,button:focus-visible,.chip:focus-visible{outline:2px solid var(--a);outline-offset:2px}
+.who{display:flex;gap:8px}
+.who button{flex:1;font-family:var(--sans);font-size:14px;padding:9px 8px;border-radius:7px;cursor:pointer;
+  border:1px solid var(--line);background:var(--surface);color:var(--muted);transition:.12s;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.who button[data-p=a][aria-pressed=true]{border-color:var(--a);background:var(--a-soft);color:var(--a);font-weight:700}
+.who button[data-p=b][aria-pressed=true]{border-color:var(--b);background:var(--b-soft);color:var(--b);font-weight:700}
+button.primary{font-family:var(--sans);font-size:15px;font-weight:700;padding:10px 22px;border-radius:7px;
+  border:1px solid var(--ink);background:var(--ink);color:var(--ground);cursor:pointer;white-space:nowrap}
+button.primary:hover{opacity:.85}
+.toast{font-size:13px;color:var(--good);grid-column:1/-1;margin:-4px 0 0;min-height:0}
+.toast:empty{display:none}
+.toast.warn{color:var(--note)}
+
+.people{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:660px){.people{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);
+  padding:16px 18px 18px;display:flex;flex-direction:column;gap:12px;border-top:3px solid var(--c)}
+.card[data-p=a]{--c:var(--a)}
+.card[data-p=b]{--c:var(--b)}
+.card h2{margin:0;font-size:15px;font-weight:700;color:var(--c);display:flex;align-items:center;gap:8px}
+.rename{border:0;background:none;color:var(--muted);font-size:11px;cursor:pointer;padding:2px 4px;font-family:var(--sans)}
+.rename:hover{color:var(--ink)}
+.now{display:flex;align-items:baseline;gap:8px}
+.now .kg{font-family:var(--mono);font-size:38px;font-weight:500;letter-spacing:-.02em;font-variant-numeric:tabular-nums;line-height:1}
+.now .unit{font-family:var(--mono);font-size:14px;color:var(--muted)}
+.now .when{font-size:12px;color:var(--muted);margin-left:auto}
+.rows{display:flex;flex-direction:column;border-top:1px solid var(--line-soft)}
+.row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+  padding:7px 0;border-bottom:1px solid var(--line-soft);font-size:13px}
+.row span:first-child{color:var(--muted)}
+.row b{font-family:var(--mono);font-weight:500;font-variant-numeric:tabular-nums;font-size:14px}
+.pill{font-family:var(--mono);font-size:12px;font-weight:500;padding:2px 8px;border-radius:20px;
+  background:var(--surface-2);color:var(--muted)}
+.pill.ahead{background:rgba(59,122,90,.14);color:var(--good)}
+.pill.behind{background:rgba(180,118,30,.15);color:var(--note)}
+.bar{height:7px;border-radius:4px;background:var(--surface-2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--c)}
+.empty{color:var(--muted);font-size:13px;padding:6px 0}
+button.ghost{align-self:flex-start;font-family:var(--sans);font-size:12px;padding:6px 12px;border-radius:6px;
+  border:1px dashed var(--line);background:none;color:var(--muted);cursor:pointer}
+button.ghost:hover{border-style:solid;color:var(--ink)}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);padding:16px 18px 12px}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.panel-head h2{margin:0;font-family:var(--serif);font-size:17px;font-weight:600}
+.chips{display:flex;gap:6px}
+.chip{font-family:var(--mono);font-size:12px;padding:5px 11px;border-radius:20px;cursor:pointer;
+  border:1px solid var(--line);background:none;color:var(--muted)}
+.chip[aria-pressed=true]{background:var(--ink);border-color:var(--ink);color:var(--ground)}
+#chart{width:100%;display:block}
+#chart text{font-family:var(--mono);fill:var(--muted)}
+.legend{display:flex;gap:18px;flex-wrap:wrap;padding:10px 2px 4px;border-top:1px solid var(--line-soft);margin-top:6px}
+.leg{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.leg i{width:22px;height:0;border-top-width:2.5px;border-top-style:solid;display:block}
+.demo{font-size:12px;color:var(--note);margin:0 0 8px;font-weight:500}
+
+.log{display:flex;flex-direction:column}
+.log .li{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:baseline;
+  padding:8px 2px;border-bottom:1px solid var(--line-soft);font-size:14px}
+.log .li:last-child{border-bottom:0}
+.log .d{font-family:var(--mono);color:var(--muted);font-size:13px;font-variant-numeric:tabular-nums}
+.log .n{font-weight:500}
+.log .n[data-p=a]{color:var(--a)}
+.log .n[data-p=b]{color:var(--b)}
+.log .w{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.log .del{border:0;background:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:0 4px;opacity:.5}
+.log .del:hover{opacity:1;color:var(--b)}
+
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);
+  padding:22px;max-width:380px;width:calc(100% - 36px);box-shadow:0 20px 60px rgba(0,0,0,.28)}
+dialog::backdrop{background:rgba(20,26,25,.5)}
+dialog h3{font-family:var(--serif);margin:0 0 4px;font-size:18px;font-weight:600}
+dialog p.hint{margin:0 0 16px;font-size:13px;color:var(--muted)}
+.dlg-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dlg-grid .full{grid-column:1/-1}
+.dlg-foot{display:flex;justify-content:space-between;gap:10px;margin-top:18px;align-items:center;flex-wrap:wrap}
+.dlg-foot .right{display:flex;gap:10px}
+button.quiet{font-family:var(--sans);font-size:14px;padding:9px 16px;border-radius:7px;border:1px solid var(--line);
+  background:none;color:var(--muted);cursor:pointer}
+button.quiet:hover{color:var(--ink)}
+button.danger{color:var(--b);border-color:transparent}
+.err{color:var(--bad);font-size:13px;margin:12px 0 0;font-family:var(--mono);word-break:break-word}
+.err:empty{display:none}
+.acct{font-family:var(--mono);font-size:12px;color:var(--muted);word-break:break-all}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>兩人體重刻度盤</h1>
+      <p class="sub">記一筆體重，看見自己離目標線是超前還是落後。</p>
+    </div>
+    <button id="sync" class="local" type="button">本機儲存</button>
+  </header>
+
+  <form class="entry" id="form">
+    <div class="field">
+      <label for="date">日期</label>
+      <input type="date" id="date" required>
+    </div>
+    <div class="field">
+      <span class="lab">誰</span>
+      <div class="who" id="who">
+        <button type="button" data-p="a" aria-pressed="true">我</button>
+        <button type="button" data-p="b" aria-pressed="false">伴侶</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="kg">體重（公斤）</label>
+      <input type="number" id="kg" step="0.1" min="20" max="300" inputmode="decimal" placeholder="65.4" required>
+    </div>
+    <button class="primary" type="submit">記錄</button>
+    <p class="toast" id="toast"></p>
+  </form>
+
+  <section class="people" id="people"></section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>體重趨勢與目標線</h2>
+      <div class="chips" id="chips">
+        <button class="chip" data-r="30" aria-pressed="false">近 30 天</button>
+        <button class="chip" data-r="90" aria-pressed="true">近 90 天</button>
+        <button class="chip" data-r="0" aria-pressed="false">全部</button>
+      </div>
+    </div>
+    <p class="demo" id="demo" hidden>下方為範例資料，記錄第一筆後就會換成你們的數字。</p>
+    <div id="chartbox"><svg id="chart"></svg></div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>最近紀錄</h2></div>
+    <div class="log" id="log"></div>
+  </section>
+</div>
+
+<dialog id="goalDlg">
+  <form method="dialog" id="goalForm">
+    <h3 id="goalTitle">設定目標</h3>
+    <p class="hint">起始體重預設帶入最近一次量測，可以自己改。</p>
+    <div class="dlg-grid">
+      <div class="field"><label for="gsd">起算日</label><input type="date" id="gsd" required></div>
+      <div class="field"><label for="gsw">起始體重</label><input type="number" id="gsw" step="0.1" min="20" max="300" required></div>
+      <div class="field"><label for="gtd">目標日期</label><input type="date" id="gtd" required></div>
+      <div class="field"><label for="gtw">目標體重</label><input type="number" id="gtw" step="0.1" min="20" max="300" required></div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="quiet danger" id="goalClear">清除目標</button>
+      <div class="right">
+        <button type="button" class="quiet" id="goalCancel">取消</button>
+        <button type="submit" class="primary">儲存</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="nameDlg">
+  <form method="dialog" id="nameForm">
+    <h3>改個稱呼</h3>
+    <p class="hint">兩個人在圖上的名字。</p>
+    <div class="field full"><label for="nameInput">名字</label><input type="text" id="nameInput" maxlength="8" required></div>
+    <div class="dlg-foot"><span></span><div class="right">
+      <button type="button" class="quiet" id="nameCancel">取消</button>
+      <button type="submit" class="primary">儲存</button>
+    </div></div>
+  </form>
+</dialog>
+
+<dialog id="authDlg">
+  <form id="authForm">
+    <h3 id="authTitle">登入同步</h3>
+    <p class="hint" id="authHint">兩個人登入<strong>同一組帳號</strong>，資料就會即時同步。第一次使用請先「建立帳號」。</p>
+    <div class="dlg-grid">
+      <div class="field full"><label for="email">Email</label><input type="email" id="email" autocomplete="username" required></div>
+      <div class="field full"><label for="pw">密碼</label><input type="password" id="pw" autocomplete="current-password" minlength="6" required></div>
+    </div>
+    <p class="err" id="authErr"></p>
+    <div class="dlg-foot">
+      <button type="button" class="quiet" id="authSignup">建立帳號</button>
+      <div class="right">
+        <button type="button" class="quiet" id="authCancel">先不要</button>
+        <button type="submit" class="primary" id="authGo">登入</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="acctDlg">
+  <h3>同步狀態</h3>
+  <p class="hint" id="acctState"></p>
+  <p class="acct" id="acctWho"></p>
+  <div class="dlg-foot">
+    <button type="button" class="quiet danger" id="acctOut">登出</button>
+    <div class="right"><button type="button" class="quiet" id="acctClose">關閉</button></div>
+  </div>
+</dialog>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script>
+"use strict";
+
+/* ============================================================
+   Firebase 設定 —— 建好專案後把這四行換掉即可。
+   apiKey 是公開設計的，安全靠 Auth + Firestore 規則，不是靠藏它。
+   還沒填時整個 app 自動退成單機模式（localStorage），功能一樣。
+   ============================================================ */
+const FB = {
+  apiKey:     "PASTE_API_KEY",
+  authDomain: "PASTE_PROJECT.firebaseapp.com",
+  projectId:  "PASTE_PROJECT",
+  appId:      "PASTE_APP_ID"
+};
+const CLOUD = FB.apiKey.indexOf("PASTE_") !== 0;
+
+/* ---------------- state ---------------- */
+const PS = ["a","b"];
+const DEFAULT_NAMES = { a:"我", b:"伴侶" };
+const S = { entries:{}, goals:{}, names:Object.assign({}, DEFAULT_NAMES) };
+let range = 90, pick = "a";
+const LS = "weight-duo-v1";
+
+const $ = s => document.querySelector(s);
+const day = s => Date.UTC(+s.slice(0,4), +s.slice(5,7)-1, +s.slice(8,10)) / 86400000;
+const fromDay = n => new Date(n*86400000).toISOString().slice(0,10);
+const todayStr = () => new Date().toLocaleDateString("sv-SE");
+const md = s => (+s.slice(5,7)) + "/" + (+s.slice(8,10));
+const kg1 = n => (Math.round(n*10)/10).toFixed(1);
+const signed = n => (n > 0 ? "+" : n < 0 ? "−" : "±") + kg1(Math.abs(n));
+const esc = s => String(s).replace(/[&<>"]/g, m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+
+/* ---------------- 本機快取 ----------------
+   永遠寫，離線也能用。連同 uid 一起存，用來偵測換帳號。       */
+function stateBlob(){ return JSON.stringify({ entries:S.entries, goals:S.goals, names:S.names }); }
+function applyBlob(blob){
+  const v = JSON.parse(blob);
+  S.entries = v.entries || {};
+  S.goals   = v.goals   || {};
+  S.names   = Object.assign({}, DEFAULT_NAMES, v.names);
+}
+function saveLocal(){
+  try{ localStorage.setItem(LS, JSON.stringify({ uid: uid, state: JSON.parse(stateBlob()) })); }catch(e){}
+}
+function readLocal(){
+  try{ return JSON.parse(localStorage.getItem(LS)) || {}; }catch(e){ return {}; }
+}
+function resetState(){
+  S.entries = {}; S.goals = {}; S.names = Object.assign({}, DEFAULT_NAMES);
+}
+
+function status(kind, text){ const el = $("#sync"); el.className = kind; el.textContent = text; }
+
+/* ---------------- Firebase 同步 ----------------
+   單一文件 tenants/{uid}，整份狀態 JSON.stringify 進 data 欄位：
+   免疫 Firestore 的巢狀陣列/型別限制，同步也只要比一個字串。 */
+let auth = null, fs = null, uid = null, unsub = null;
+let pushTimer = null, dirty = false, lastSynced = "";
+
+function docRef(){ return fs.collection("tenants").doc(uid); }
+
+function touch(){                     // 任何改動都走這裡
+  saveLocal();
+  if(!uid) return;
+  dirty = true;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(flushPending, 800);
+}
+
+function flushPending(){
+  clearTimeout(pushTimer);
+  if(!dirty || !uid) return;
+  const blob = stateBlob();
+  dirty = false;
+  docRef().set({ data: blob, updated: Date.now() })
+    .then(() => { lastSynced = blob; status("live", "已同步"); })
+    .catch(e => { dirty = true; status("err", "同步失敗：" + (e.code || e.message)); });
+}
+// iOS PWA 切背景是突然的：debounce 空窗期內被凍結，那次寫入就永遠沒送出。
+addEventListener("visibilitychange", () => { if(document.visibilityState === "hidden") flushPending(); });
+addEventListener("pagehide", flushPending);
+
+function subscribe(){
+  unsub = docRef().onSnapshot(snap => {
+    if(!snap.exists){
+      // 雲端還沒有這個帳號的資料。此時 S 已經是「本帳號的」——
+      // 換帳號時 onAuth 已先清空，所以直接把手上的推上去是安全的。
+      status("live", "雲端同步 · 首次建立");
+      if(Object.keys(S.entries).length || Object.keys(S.goals).length){ dirty = true; flushPending(); }
+      return;
+    }
+    const blob = snap.data().data;
+    if(typeof blob !== "string" || blob === lastSynced) return;   // 自己的寫入，不重繪
+    lastSynced = blob;
+    try{ applyBlob(blob); }catch(e){ status("err", "雲端資料讀不懂：" + e.message); return; }
+    saveLocal(); render();
+    status("live", "雲端同步");
+  }, e => status("err", "同步中斷：" + (e.code || e.message)));
+}
+
+function initFirebase(){
+  if(!CLOUD){ status("local", "本機儲存（未接雲端）"); return; }
+  try{
+    firebase.initializeApp(FB);
+    auth = firebase.auth();
+    fs = firebase.firestore();
+  }catch(e){ status("err", "Firebase 初始化失敗：" + (e.code || e.message)); return; }
+
+  auth.onAuthStateChanged(user => {
+    if(unsub){ unsub(); unsub = null; }
+    clearTimeout(pushTimer); dirty = false; lastSynced = "";
+
+    if(!user){
+      uid = null;
+      status("local", "未登入 · 只存這台裝置");
+      return;
+    }
+    const cached = readLocal();
+    uid = user.uid;
+    // 換帳號防污染：上一次是別的帳號（或沒登入過）就別把殘留資料帶進來。
+    if(cached.uid && cached.uid !== uid){ resetState(); render(); }
+    saveLocal();
+    status("live", "連線中…");
+    subscribe();
+  });
+}
+
+/* ---------------- 帳號 UI ---------------- */
+function authMsg(code){
+  return ({
+    "auth/invalid-credential":"帳號或密碼不對。",
+    "auth/wrong-password":"密碼不對。",
+    "auth/user-not-found":"沒有這個帳號，先按「建立帳號」。",
+    "auth/invalid-email":"Email 格式不對。",
+    "auth/weak-password":"密碼至少 6 個字。",
+    "auth/email-already-in-use":"這個 Email 已經註冊過了，直接登入即可。",
+    "auth/network-request-failed":"連不上網路。",
+    "auth/unauthorized-domain":"這個網址還沒加進 Firebase → Authentication → Settings → Authorized domains。",
+    "auth/operation-not-allowed":"Firebase 還沒開啟 Email/Password 登入方式。"
+  })[code] || code;
+}
+$("#authCancel").addEventListener("click", () => $("#authDlg").close());
+$("#authForm").addEventListener("submit", ev => { ev.preventDefault(); doAuth("in"); });
+$("#authSignup").addEventListener("click", () => doAuth("up"));
+function doAuth(mode){
+  const em = $("#email").value.trim(), pw = $("#pw").value;
+  if(!em || pw.length < 6){ $("#authErr").textContent = "Email 和至少 6 個字的密碼都要填。"; return; }
+  $("#authErr").textContent = "";
+  const fn = mode === "up" ? "createUserWithEmailAndPassword" : "signInWithEmailAndPassword";
+  auth[fn](em, pw)
+    .then(() => { $("#pw").value = ""; $("#authDlg").close(); })
+    .catch(e => { $("#authErr").textContent = authMsg(e.code || e.message); });
+}
+
+$("#sync").addEventListener("click", () => {
+  if(!CLOUD){
+    $("#authTitle").textContent = "還沒接雲端";
+    $("#authHint").innerHTML = "這份 <code>index.html</code> 裡的 <code>FB</code> 設定還是占位字串，目前資料只存在這台裝置。填好 Firebase 設定重新部署，就會出現登入。";
+    $("#authForm").querySelectorAll("input,button.primary,#authSignup").forEach(el => el.style.display = "none");
+    $("#authDlg").showModal(); return;
+  }
+  if(uid){
+    $("#acctState").textContent = $("#sync").textContent;
+    $("#acctWho").textContent = (auth.currentUser && auth.currentUser.email) || uid;
+    $("#acctDlg").showModal();
+  } else {
+    $("#authDlg").showModal();
+  }
+});
+$("#acctClose").addEventListener("click", () => $("#acctDlg").close());
+$("#acctOut").addEventListener("click", () => {
+  flushPending();
+  $("#acctDlg").close();
+  auth.signOut().catch(e => status("err", "登出失敗：" + (e.code || e.message)));
+});
+
+/* ---------------- derived ---------------- */
+function seriesOf(p){
+  return Object.values(S.entries).filter(e => e.person === p)
+    .sort((x,y) => x.date < y.date ? -1 : 1);
+}
+// 目標線在某天「應該」的體重（線性內插，區間外夾在端點）
+function planAt(g, d){
+  const s = day(g.startDate), t = day(g.targetDate);
+  if(t <= s || d >= t) return g.targetWeight;
+  if(d <= s) return g.startWeight;
+  return g.startWeight + (g.targetWeight - g.startWeight) * (d - s) / (t - s);
+}
+
+/* ---------------- demo data（僅在完全沒紀錄時） ---------------- */
+function demoState(){
+  const t = day(todayStr()), e = {}, g = {};
+  const mk = (p, w0, drop, jitter) => {
+    for(let i = 8; i >= 0; i--){
+      const d = fromDay(t - i*7);
+      e[d + "_" + p] = { date:d, person:p, kg: Math.round((w0 - drop*(8-i) + Math.sin(i*2.1)*jitter)*10)/10 };
+    }
+    g[p] = { startDate: fromDay(t-56), startWeight: w0, targetDate: fromDay(t+70), targetWeight: w0 - drop*20 };
+  };
+  mk("a", 78.0, 0.45, 0.5);
+  mk("b", 61.5, 0.30, 0.4);
+  return { entries:e, goals:g, names:S.names };
+}
+
+/* ---------------- render ---------------- */
+function render(){
+  const real = Object.keys(S.entries).length > 0;
+  const V = real ? S : demoState();
+  $("#demo").hidden = real;
+  document.querySelectorAll("#who button").forEach(b => b.textContent = S.names[b.dataset.p]);
+  renderPeople(V, real);
+  renderChart(V);
+  renderLog(V, real);
+}
+
+function renderPeople(V, real){
+  const box = $("#people"); box.innerHTML = "";
+  const today = day(todayStr());
+  PS.forEach(p => {
+    const ser = Object.values(V.entries).filter(e => e.person === p).sort((x,y) => x.date < y.date ? -1 : 1);
+    const last = ser[ser.length-1], g = V.goals[p];
+    const c = document.createElement("div");
+    c.className = "card"; c.dataset.p = p;
+    let h = '<h2>' + esc(V.names[p]) + '<button class="rename" data-name="' + p + '" type="button">改名</button></h2>';
+
+    if(last){
+      h += '<div class="now"><span class="kg">' + kg1(last.kg) + '</span><span class="unit">kg</span>' +
+           '<span class="when">' + md(last.date) + ' 量的</span></div>';
+    } else {
+      h += '<div class="empty">還沒有紀錄，上面記一筆就開始了。</div>';
+    }
+
+    if(g && last){
+      const gap = last.kg - g.targetWeight;
+      const plan = planAt(g, today);
+      const diff = last.kg - plan;                 // <0 超前
+      const span = g.startWeight - g.targetWeight;
+      const prog = span === 0 ? 1 : Math.max(0, Math.min(1, (g.startWeight - last.kg) / span));
+      const daysLeft = day(g.targetDate) - today;
+      h += '<div class="rows">' +
+        row("目標", kg1(g.targetWeight) + " kg　·　" + md(g.targetDate) +
+            (daysLeft >= 0 ? "（剩 " + daysLeft + " 天）" : "（已過期）")) +
+        row("距目標還有", '<b>' + kg1(Math.abs(gap)) + " kg</b>") +
+        row("今天目標線上是", '<b>' + kg1(plan) + " kg</b>" +
+            '<span class="pill ' + (diff <= 0 ? "ahead" : "behind") + '">' +
+            (diff <= 0 ? "超前 " : "落後 ") + kg1(Math.abs(diff)) + " kg</span>") +
+        row("從起算日至今", '<b>' + signed(last.kg - g.startWeight) + " kg</b>") +
+        '</div>' +
+        '<div class="bar"><i style="width:' + (prog*100).toFixed(1) + '%"></i></div>' +
+        '<button class="ghost" data-goal="' + p + '" type="button">調整目標</button>';
+    } else {
+      h += '<div class="empty">' + (real ? "尚未設定目標。" : "") + '</div>' +
+           '<button class="ghost" data-goal="' + p + '" type="button">設定目標</button>';
+    }
+    c.innerHTML = h; box.appendChild(c);
+  });
+}
+function row(k, v){ return '<div class="row"><span>' + k + '</span><span style="display:flex;gap:8px;align-items:baseline">' + v + '</span></div>'; }
+
+/* ---------------- chart ---------------- */
+function renderChart(V){
+  const svg = $("#chart"), box = $("#chartbox");
+  const W = Math.max(300, box.clientWidth || 700);
+  const narrow = W < 520;
+  const H = narrow ? 230 : 290;
+  const P = { l: narrow ? 34 : 40, r: narrow ? 14 : 58, t: 16, b: 30 };
+  const today = day(todayStr());
+
+  // 統計窗口 = 顯示窗口
+  const series = {}, goals = {};
+  let pts = [];
+  PS.forEach(p => {
+    let s = Object.values(V.entries).filter(e => e.person === p).sort((x,y) => x.date < y.date ? -1 : 1);
+    if(range) s = s.filter(e => day(e.date) >= today - range);
+    series[p] = s; pts = pts.concat(s);
+    if(V.goals[p]) goals[p] = V.goals[p];
+  });
+
+  if(!pts.length){
+    svg.setAttribute("viewBox", "0 0 " + W + " 120");
+    svg.setAttribute("height", 120);
+    svg.innerHTML = '<text x="' + (W/2) + '" y="64" text-anchor="middle" font-size="13">這個區間還沒有紀錄</text>';
+    $("#legend").innerHTML = ""; return;
+  }
+
+  let x0 = Math.min.apply(null, pts.map(e => day(e.date)));
+  let x1 = Math.max.apply(null, pts.map(e => day(e.date)));
+  let ys = pts.map(e => e.kg);
+  Object.keys(goals).forEach(p => {
+    const g = goals[p];
+    x0 = Math.min(x0, Math.max(x0, day(g.startDate)));
+    x1 = Math.max(x1, day(g.targetDate));
+    ys.push(planAt(g, x0), planAt(g, x1));
+  });
+  x1 = Math.max(x1, today);
+  if(x1 - x0 < 7) x1 = x0 + 7;
+
+  let lo = Math.min.apply(null, ys), hi = Math.max.apply(null, ys);
+  if(hi - lo < 3){ const m = (hi+lo)/2; lo = m - 1.5; hi = m + 1.5; }
+  const pad = (hi - lo) * 0.15; lo -= pad; hi += pad;
+
+  const X = d => P.l + (d - x0) / (x1 - x0) * (W - P.l - P.r);
+  const Y = w => P.t + (hi - w) / (hi - lo) * (H - P.t - P.b);
+
+  let g = "";
+  const step = niceStep(hi - lo);
+  for(let v = Math.ceil(lo/step)*step; v <= hi; v += step){
+    const y = Y(v);
+    g += line(P.l, y, W - P.r, y, "var(--line-soft)", 1);
+    g += text(P.l - 6, y + 4, kg1(v), 10, "end");
+  }
+  if(today >= x0 && today <= x1){
+    g += '<line x1="' + X(today) + '" y1="' + P.t + '" x2="' + X(today) + '" y2="' + (H-P.b) +
+         '" stroke="var(--line)" stroke-width="1" stroke-dasharray="2 4"/>';
+    g += text(X(today), P.t - 4, "今天", 10, "middle");
+  }
+  PS.forEach(p => {
+    const gl = goals[p]; if(!gl) return;
+    const a = Math.max(x0, day(gl.startDate)), b = Math.min(x1, day(gl.targetDate));
+    if(b <= a) return;
+    g += '<line x1="' + X(a) + '" y1="' + Y(planAt(gl,a)) + '" x2="' + X(b) + '" y2="' + Y(planAt(gl,b)) +
+         '" stroke="var(--' + p + ')" stroke-width="1.5" stroke-dasharray="5 5" opacity="0.45"/>';
+    if(day(gl.targetDate) <= x1){
+      g += '<circle cx="' + X(b) + '" cy="' + Y(gl.targetWeight) + '" r="4" fill="var(--ground)" stroke="var(--' + p +
+           ')" stroke-width="1.5" opacity="0.8"/>';
+      if(!narrow) g += text(X(b) + 8, Y(gl.targetWeight) + 4, kg1(gl.targetWeight), 10, "start", "var(--" + p + ")");
+    }
+  });
+  PS.forEach(p => {
+    const s = series[p]; if(!s.length) return;
+    const dash = p === "b" ? ' stroke-dasharray="7 4"' : "";
+    const r = s.length > 14 ? 2.2 : 3.2;
+    if(s.length > 1){
+      g += '<polyline fill="none" stroke="var(--' + p + ')" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"' +
+           dash + ' points="' + s.map(e => X(day(e.date)) + "," + Y(e.kg)).join(" ") + '"/>';
+    }
+    s.forEach((e,i) => {
+      const isLast = i === s.length - 1;
+      g += '<circle cx="' + X(day(e.date)) + '" cy="' + Y(e.kg) + '" r="' + (isLast ? r + 1.6 : r) +
+           '" fill="' + (isLast ? "var(--" + p + ")" : "var(--surface)") + '" stroke="var(--' + p + ')" stroke-width="2"/>';
+      if(isLast) g += text(X(day(e.date)), Y(e.kg) - 11, kg1(e.kg), 11,
+                           X(day(e.date)) > W - P.r - 26 ? "end" : "middle", "var(--" + p + ")", 600);
+    });
+  });
+  const all = Array.from(new Set(pts.map(e => e.date))).sort();
+  const every = Math.ceil(all.length / (narrow ? 4 : 7));
+  all.forEach((d,i) => { if(i % every === 0 || i === all.length - 1) g += text(X(day(d)), H - 10, md(d), 10, "middle"); });
+
+  svg.setAttribute("viewBox", "0 0 " + W + " " + H);
+  svg.setAttribute("height", H);
+  svg.innerHTML = g;
+
+  $("#legend").innerHTML = PS.map(p =>
+      '<span class="leg"><i style="border-top-color:var(--' + p + ');border-top-style:' +
+      (p === "b" ? "dashed" : "solid") + '"></i>' + esc(V.names[p]) + ' 實際</span>').join("") +
+    PS.filter(p => goals[p]).map(p =>
+      '<span class="leg"><i style="border-top-color:var(--' + p + ');border-top-style:dotted;opacity:.6"></i>' +
+      esc(V.names[p]) + ' 目標線</span>').join("");
+}
+function niceStep(span){
+  const raw = span / 5, mag = Math.pow(10, Math.floor(Math.log10(raw))), n = raw / mag;
+  return (n > 5 ? 10 : n > 2 ? 5 : n > 1 ? 2 : 1) * mag;
+}
+function line(x1,y1,x2,y2,c,w){ return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+c+'" stroke-width="'+w+'"/>'; }
+function text(x,y,t,size,anchor,fill,weight){
+  return '<text x="'+x+'" y="'+y+'" font-size="'+size+'" text-anchor="'+(anchor||"start")+'"'+
+    (fill ? ' fill="'+fill+'"' : "") + (weight ? ' font-weight="'+weight+'"' : "") + '>'+esc(t)+'</text>';
+}
+
+/* ---------------- log ---------------- */
+function renderLog(V, real){
+  const el = $("#log");
+  const list = Object.entries(V.entries).map(([id,e]) => Object.assign({id}, e))
+    .sort((x,y) => x.date < y.date ? 1 : x.date > y.date ? -1 : (x.person < y.person ? -1 : 1)).slice(0, 24);
+  if(!list.length){ el.innerHTML = '<div class="empty">還沒有任何紀錄。</div>'; return; }
+  el.innerHTML = list.map(e =>
+    '<div class="li"><span class="d">' + e.date + '</span>' +
+    '<span class="n" data-p="' + e.person + '">' + esc(V.names[e.person]) + '</span>' +
+    '<span class="w">' + kg1(e.kg) + ' kg</span>' +
+    (real ? '<button class="del" data-del="' + esc(e.id) + '" title="刪除" type="button">×</button>' : '<span></span>') +
+    '</div>').join("");
+}
+
+/* ---------------- interactions ---------------- */
+let toastTimer;
+function toast(msg, warn){
+  const t = $("#toast"); t.textContent = msg; t.className = "toast" + (warn ? " warn" : "");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.textContent = ""; }, 4000);
+}
+
+$("#who").addEventListener("click", ev => {
+  const b = ev.target.closest("button[data-p]"); if(!b) return;
+  pick = b.dataset.p;
+  document.querySelectorAll("#who button").forEach(x => x.setAttribute("aria-pressed", String(x.dataset.p === pick)));
+});
+
+$("#form").addEventListener("submit", ev => {
+  ev.preventDefault();
+  const date = $("#date").value, kg = parseFloat($("#kg").value);
+  if(!date || !(kg > 0)) return;
+  const id = date + "_" + pick, existed = !!S.entries[id];
+  S.entries[id] = { date, person: pick, kg: Math.round(kg*10)/10 };
+  $("#kg").value = ""; $("#kg").focus();
+  render(); touch();
+  toast((existed ? "已更新 " : "已記下 ") + S.names[pick] + " " + md(date) + " 的 " + kg1(kg) + " kg");
+});
+
+document.addEventListener("click", ev => {
+  const del = ev.target.closest("[data-del]");
+  if(del){ delete S.entries[del.dataset.del]; render(); touch(); toast("已刪除一筆紀錄"); return; }
+  const gp = ev.target.closest("[data-goal]"); if(gp) return openGoal(gp.dataset.goal);
+  const np = ev.target.closest("[data-name]"); if(np) return openName(np.dataset.name);
+});
+
+$("#chips").addEventListener("click", ev => {
+  const c = ev.target.closest(".chip"); if(!c) return;
+  range = +c.dataset.r;
+  document.querySelectorAll("#chips .chip").forEach(x => x.setAttribute("aria-pressed", String(x === c)));
+  render();
+});
+
+let goalFor = "a";
+function openGoal(p){
+  goalFor = p;
+  const g = S.goals[p] || {}, ser = seriesOf(p), last = ser[ser.length-1], t = day(todayStr());
+  $("#goalTitle").textContent = S.names[p] + " 的目標";
+  $("#gsd").value = g.startDate || todayStr();
+  $("#gsw").value = g.startWeight != null ? g.startWeight : (last ? last.kg : "");
+  $("#gtd").value = g.targetDate || fromDay(t + 84);
+  $("#gtw").value = g.targetWeight != null ? g.targetWeight : "";
+  $("#goalDlg").showModal();
+}
+$("#goalCancel").addEventListener("click", () => $("#goalDlg").close());
+$("#goalClear").addEventListener("click", () => {
+  delete S.goals[goalFor]; $("#goalDlg").close(); render(); touch();
+  toast("已清除 " + S.names[goalFor] + " 的目標");
+});
+$("#goalForm").addEventListener("submit", () => {
+  const g = { startDate: $("#gsd").value, startWeight: parseFloat($("#gsw").value),
+              targetDate: $("#gtd").value, targetWeight: parseFloat($("#gtw").value) };
+  if(!g.startDate || !g.targetDate || !(g.startWeight > 0) || !(g.targetWeight > 0)) return;
+  if(day(g.targetDate) <= day(g.startDate)){ toast("目標日期要晚於起算日。", true); return; }
+  S.goals[goalFor] = g; render(); touch();
+  toast("已設定 " + S.names[goalFor] + " 的目標：" + kg1(g.targetWeight) + " kg");
+});
+
+let nameFor = "a";
+function openName(p){ nameFor = p; $("#nameInput").value = S.names[p]; $("#nameDlg").showModal(); $("#nameInput").select(); }
+$("#nameCancel").addEventListener("click", () => $("#nameDlg").close());
+$("#nameForm").addEventListener("submit", () => {
+  const v = $("#nameInput").value.trim(); if(!v) return;
+  S.names[nameFor] = v; render(); touch();
+});
+
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(render, 120); });
+
+/* ---------------- boot ---------------- */
+$("#date").value = todayStr();
+$("#date").max = todayStr();
+const boot = readLocal();
+if(boot.state){ try{ applyBlob(JSON.stringify(boot.state)); }catch(e){} }
+render();
+initFirebase();
+
+/* ---------------- self-check（開 console 看，不影響畫面） ---------------- */
+(function selfCheck(){
+  const g = { startDate:"2026-01-01", startWeight:80, targetDate:"2026-03-02", targetWeight:74 }; // 60 天 −6kg
+  const at = d => Math.round(planAt(g, day(d))*100)/100;
+  console.assert(at("2026-01-01") === 80, "起算日應為起始體重");
+  console.assert(at("2026-03-02") === 74, "目標日應為目標體重");
+  console.assert(at("2026-01-31") === 77, "中點應為 77，實得 " + at("2026-01-31"));
+  console.assert(at("2025-12-01") === 80 && at("2026-06-01") === 74, "區間外應夾在端點");
+  const flat = { startDate:"2026-01-01", startWeight:70, targetDate:"2026-01-01", targetWeight:70 };
+  console.assert(planAt(flat, day("2026-02-01")) === 70, "零長度區間不應除以零");
+  console.assert(signed(-1.24) === "−1.2" && signed(0) === "±0.0", "signed 格式");
+  console.assert(day("2026-01-02") - day("2026-01-01") === 1, "日期差");
+  // 同步 blob 必須可完整往返
+  const before = stateBlob(); applyBlob(before);
+  console.assert(stateBlob() === before, "applyBlob(stateBlob()) 必須是恆等");
+})();
+</script>
+</body>
+</html>
